@@ -108,6 +108,14 @@ final class PluginContext extends ContextWrapper {
         return super.checkPermission(permission, pid, uid);
     }
 
+    @Override
+    public int checkCallingOrSelfPermission(String permission) {
+        if (Binder.getCallingPid() == Process.myPid() && Binder.getCallingUid() == Process.myUid()) {
+            return checkSelfPermission(permission);
+        }
+        return super.checkCallingOrSelfPermission(permission);
+    }
+
     // Derived contexts.
 
     @Override
