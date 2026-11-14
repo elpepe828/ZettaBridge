@@ -213,19 +213,20 @@ public class LibraryActivity extends Activity {
     private void showActions(PluginRecord r) {
         new AlertDialog.Builder(this)
                 .setTitle(r.label)
-                .setItems(new String[] {"Launch", "Last run report", "Pin shortcut",
+                .setItems(new String[] {"Launch", "Manage permissions", "Last run report", "Pin shortcut",
                                         r.hideAds ? "Show ads" : "Hide ads",
                                         r.preciseFaults ? "Precise faults: on" : "Precise faults (slow)",
                                         r.diagnostics ? "GL diagnostics: on" : "GL diagnostics (slow)",
                                         "Delete"},
                         (dialog, which) -> {
                             if (which == 0) launch(r);
-                            if (which == 1) showRuntimeReport(r);
-                            if (which == 2) pinShortcut(r);
-                            if (which == 3) toggleAds(r);
-                            if (which == 4) togglePreciseFaults(r);
-                            if (which == 5) toggleDiagnostics(r);
-                            if (which == 6) confirmDelete(r);
+                            if (which == 1) startActivity(PluginPermissionsActivity.intent(this, r.packageName));
+                            if (which == 2) showRuntimeReport(r);
+                            if (which == 3) pinShortcut(r);
+                            if (which == 4) toggleAds(r);
+                            if (which == 5) togglePreciseFaults(r);
+                            if (which == 6) toggleDiagnostics(r);
+                            if (which == 7) confirmDelete(r);
                         })
                 .show();
     }
