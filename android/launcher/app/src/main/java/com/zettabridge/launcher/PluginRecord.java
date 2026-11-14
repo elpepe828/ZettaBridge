@@ -37,6 +37,8 @@ final class PluginRecord {
     final Set<String> requestedPermissions = new TreeSet<>();
     /** Dangerous permissions explicitly enabled for this plugin in ZettaBridge. */
     final Set<String> grantedPermissions = new TreeSet<>();
+    /** Permissions the guest has already requested, for rationale compatibility. */
+    final Set<String> attemptedPermissions = new TreeSet<>();
     /** Every ABI directory found under lib/ in the APK. */
     final Set<String> abis = new TreeSet<>();
 
@@ -106,6 +108,16 @@ final class PluginRecord {
         else grantedPermissions.remove(permission);
     }
 
+    boolean hasAttemptedPermission(String permission) {
+        return permission != null && attemptedPermissions.contains(permission);
+    }
+
+    void markPermissionAttempted(String permission) {
+        if (permission != null && requestedPermissions.contains(permission)) {
+            attemptedPermissions.add(permission);
+        }
+    }
+
     synchronized Bitmap icon() {
         if (!iconLoaded) {
             iconLoaded = true;
@@ -124,6 +136,7 @@ final class PluginRecord {
         p.setProperty("abis", String.join(",", abis));
         p.setProperty("requestedPermissions", String.join(",", requestedPermissions));
         p.setProperty("grantedPermissions", String.join(",", grantedPermissions));
+        p.setProperty("attemptedPermissions", String.join(",", attemptedPermissions));
         if (selectedAbi != null) p.setProperty("selectedAbi", selectedAbi);
         p.setProperty("hideAds", Boolean.toString(hideAds));
         p.setProperty("preciseFaults", Boolean.toString(preciseFaults));
@@ -162,6 +175,11 @@ final class PluginRecord {
         for (String permission : p.getProperty("grantedPermissions", "").split(",")) {
             if (!permission.isEmpty() && r.requestedPermissions.contains(permission)) {
                 r.grantedPermissions.add(permission);
+            }
+        }
+        for (String permission : p.getProperty("attemptedPermissions", "").split(",")) {
+            if (!permission.isEmpty() && r.requestedPermissions.contains(permission)) {
+                r.attemptedPermissions.add(permission);
             }
         }
         r.selectedAbi = p.getProperty("selectedAbi");
