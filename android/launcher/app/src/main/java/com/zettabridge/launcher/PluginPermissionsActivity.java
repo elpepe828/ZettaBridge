@@ -222,6 +222,23 @@ public final class PluginPermissionsActivity extends Activity {
                 return power != null && power.isIgnoringBatteryOptimizations(getPackageName())
                         ? "Battery-optimization exemption enabled for ZettaBridge."
                         : "Battery-optimization exemption not enabled for ZettaBridge.";
+            case "android.permission.ACCESS_NOTIFICATION_POLICY":
+                android.app.NotificationManager notifications =
+                        getSystemService(android.app.NotificationManager.class);
+                return notifications != null && notifications.isNotificationPolicyAccessGranted()
+                        ? "Do Not Disturb policy access enabled for ZettaBridge."
+                        : "Do Not Disturb policy access not enabled for ZettaBridge.";
+            case "android.permission.USE_FULL_SCREEN_INTENT":
+                if (Build.VERSION.SDK_INT < 34) return "Not applicable on this Android version.";
+                android.app.NotificationManager fullScreenNotifications =
+                        getSystemService(android.app.NotificationManager.class);
+                return fullScreenNotifications != null && fullScreenNotifications.canUseFullScreenIntent()
+                        ? "Full-screen notification access enabled for ZettaBridge."
+                        : "Full-screen notification access not enabled for ZettaBridge.";
+            case "android.permission.REQUEST_INSTALL_PACKAGES":
+                return getPackageManager().canRequestPackageInstalls()
+                        ? "Allow app installs from ZettaBridge is enabled."
+                        : "Allow app installs from ZettaBridge is not enabled.";
             default:
                 return null;
         }
@@ -309,6 +326,14 @@ public final class PluginPermissionsActivity extends Activity {
                 return Build.VERSION.SDK_INT >= 23
                         ? new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, hostUri)
                         : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, hostUri);
+            case "android.permission.ACCESS_NOTIFICATION_POLICY":
+                return new Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS);
+            case "android.permission.USE_FULL_SCREEN_INTENT":
+                return Build.VERSION.SDK_INT >= 34
+                        ? new Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, hostUri)
+                        : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, hostUri);
+            case "android.permission.REQUEST_INSTALL_PACKAGES":
+                return new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, hostUri);
             default:
                 return null;
         }
@@ -319,7 +344,10 @@ public final class PluginPermissionsActivity extends Activity {
                 || "android.permission.WRITE_SETTINGS".equals(permission)
                 || "android.permission.MANAGE_EXTERNAL_STORAGE".equals(permission)
                 || "android.permission.SCHEDULE_EXACT_ALARM".equals(permission)
-                || "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS".equals(permission);
+                || "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS".equals(permission)
+                || "android.permission.ACCESS_NOTIFICATION_POLICY".equals(permission)
+                || "android.permission.USE_FULL_SCREEN_INTENT".equals(permission)
+                || "android.permission.REQUEST_INSTALL_PACKAGES".equals(permission);
     }
 
     private boolean isDangerousPermission(String permission) {
