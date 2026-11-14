@@ -214,7 +214,7 @@ final class PackageManagerHook implements InvocationHandler {
     }
 
     /** The real call threw (e.g. NameNotFound wrapped by the binder layer): answer plugin components anyway. */
-    private Object rewriteMissing(Method method, Object[] args) {
+    private Object rewriteMissing(Method method, Object[] args) throws Throwable {
         if (args == null || args.length == 0) return null;
         String name = method.getName();
         switch (name) {
