@@ -135,6 +135,28 @@ final class PackageManagerHook implements InvocationHandler {
                 }
                 return result;
             }
+            case "getPackageUid": {
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])) {
+                    return android.os.Process.myUid();
+                }
+                return result;
+            }
+            case "getPackagesForUid": {
+                LoadedPlugin p = runtime.current();
+                if (p != null && args[0] instanceof Integer
+                        && ((Integer) args[0]) == android.os.Process.myUid()) {
+                    return new String[] {p.packageName, hostPackage};
+                }
+                return result;
+            }
+            case "getNameForUid": {
+                LoadedPlugin p = runtime.current();
+                if (p != null && args[0] instanceof Integer
+                        && ((Integer) args[0]) == android.os.Process.myUid()) {
+                    return p.packageName;
+                }
+                return result;
+            }
             default:
                 return result;
         }
@@ -178,6 +200,12 @@ final class PackageManagerHook implements InvocationHandler {
                 return p != null && p.application != null
                         ? p.application.checkSelfPermission((String) args[0])
                         : PackageManager.PERMISSION_DENIED;
+            }
+            case "getPackageUid": {
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])) {
+                    return android.os.Process.myUid();
+                }
+                return null;
             }
             default:
                 return null;
