@@ -76,7 +76,8 @@ final class GuestInstrumentation extends Instrumentation {
         }
         ActivityResult permissionResult = PluginPermissionManager.interceptRequest(runtime, intent);
         if (permissionResult != null) return permissionResult;
-        Intent routed = runtime.route(intent);
+        Intent settings = PluginPermissionManager.redirectApplicationDetails(runtime, intent);
+        Intent routed = settings != null ? settings : runtime.route(intent);
         return (ActivityResult) Reflect.invoke(execStartActivity, base, who, contextThread, token, target, routed,
                 requestCode, options);
     }
@@ -93,7 +94,8 @@ final class GuestInstrumentation extends Instrumentation {
         }
         ActivityResult permissionResult = PluginPermissionManager.interceptRequest(runtime, intent);
         if (permissionResult != null) return permissionResult;
-        Intent routed = runtime.route(intent);
+        Intent settings = PluginPermissionManager.redirectApplicationDetails(runtime, intent);
+        Intent routed = settings != null ? settings : runtime.route(intent);
         return (ActivityResult) Reflect.invoke(execStartActivityFromString, base, who, contextThread, token, target,
                 routed, requestCode, options);
     }
@@ -109,7 +111,10 @@ final class GuestInstrumentation extends Instrumentation {
             throw new IllegalStateException("Instrumentation.execStartActivities not found", e);
         }
         Intent[] routed = new Intent[intents.length];
-        for (int i = 0; i < intents.length; i++) routed[i] = runtime.route(intents[i]);
+        for (int i = 0; i < intents.length; i++) {
+            Intent settings = PluginPermissionManager.redirectApplicationDetails(runtime, intents[i]);
+            routed[i] = settings != null ? settings : runtime.route(intents[i]);
+        }
         Log.d(TAG, "execStartActivities: " + intents.length + " intents");
         Reflect.invoke(execStartActivities, base, who, contextThread, token, target, routed, options);
     }
