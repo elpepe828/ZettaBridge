@@ -60,6 +60,7 @@ public final class PluginPermissionsActivity extends Activity {
         try {
             pluginInfo = getPackageManager().getPackageArchiveInfo(record.apk().getAbsolutePath(),
                     PluginStore.ARCHIVE_FLAGS);
+            if (pluginInfo == null) throw new IllegalStateException("Cannot parse imported APK manifest");
             PackageInfo hostInfo = getPackageManager().getPackageInfo(getPackageName(),
                     PackageManager.GET_PERMISSIONS);
             if (hostInfo.requestedPermissions != null) {
