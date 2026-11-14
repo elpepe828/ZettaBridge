@@ -79,6 +79,7 @@ final class PluginStore {
         if (!plugins.isDirectory() && !plugins.mkdirs()) throw new IOException("cannot create " + plugins);
         File target = new File(plugins, info.packageName);
         File staging = new File(plugins, "." + info.packageName + ".importing");
+        PluginRecord previous = PluginRecord.load(target);
         PluginFiles.deleteRecursive(staging);
         if (!staging.mkdirs()) throw new IOException("cannot create " + staging);
         try {
@@ -96,6 +97,15 @@ final class PluginStore {
             r.targetSdk = ai.targetSdkVersion;
             if (info.requestedPermissions != null) {
                 r.requestedPermissions.addAll(java.util.Arrays.asList(info.requestedPermissions));
+            }
+            // Keep the user's per-plugin grants across a re-import, but never carry a grant
+            // forward for a permission the updated APK no longer requests.
+            if (previous != null) {
+                for (String permission : r.requestedPermissions) {
+                    if (previous.hasGrantedPermission(permission)) {
+                        r.grantedPermissions.add(permission);
+                    }
+                }
             }
             r.abis.addAll(PluginFiles.scanAbis(apk));
             r.selectedAbi = PluginFiles.selectAbi(r.abis);
