@@ -1860,3 +1860,26 @@ Report lines that localize this area: `jni-input-attach` (ident, looper, owner a
 reproducible one: whichever control is pressed first keeps working, and the other one ends the
 process - the shape of something initialized once, for one path only. The abort message in the
 native dump is the next piece of evidence; the report does not carry it.
+
+
+## Permission compatibility layer (2026-11-14)
+
+Implemented on `codex/permission-compatibility-layer`:
+
+- APK parsing now requests `PackageInfo.requestedPermissions`.
+- Plugin `Context` and `PackageManager` checks are filtered against the active APK's
+  declared permissions. Rationale and permission-flag queries are mapped to the host
+  package only for permissions declared by that APK.
+- Runtime permission request intents are checked before dispatch; undeclared requests are
+  rejected, while valid requests use Android's normal Activity result/callback flow.
+- PackageInfo reports the plugin's requested permissions and the launcher's actual UID grant
+  state.
+- The launcher manifest declares a broad compatibility set for common runtime and special
+  permissions. Special-access Settings flows, AppOps attribution and true per-plugin isolation
+  remain open; see `docs/permission-compatibility.md`.
+- Added pure-Java contract tests for manifest membership and undeclared permission request rejection.
+
+Required next validation: `tests/launcher/run_tests.sh`, `tests/launcher/compile_launcher.sh`,
+Android launcher build, then device tests for grant/deny, rationale and callback behavior
+(camera, microphone, location, notifications and media). Never describe these permissions as
+isolated per plugin: all guest APKs share the launcher's Android UID.

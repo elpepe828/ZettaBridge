@@ -12,6 +12,8 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Parcel;
+import android.os.Process;
 import android.util.Log;
 
 import java.lang.reflect.Field;
@@ -35,11 +37,13 @@ final class PackageManagerHook implements InvocationHandler {
     private final Object real;
     private final String hostPackage;
     private final GuestRuntime runtime;
+    private final Context hostContext;
 
-    private PackageManagerHook(Object real, String hostPackage, GuestRuntime runtime) {
+    private PackageManagerHook(Object real, String hostPackage, GuestRuntime runtime, Context hostContext) {
         this.real = real;
         this.hostPackage = hostPackage;
         this.runtime = runtime;
+        this.hostContext = hostContext;
     }
 
     static void install(Context host, GuestRuntime runtime) {
@@ -49,7 +53,7 @@ final class PackageManagerHook implements InvocationHandler {
             if (current == null || Proxy.isProxyClass(current.getClass())) return;
             Class<?> ipm = Class.forName("android.content.pm.IPackageManager");
             Object proxy = Proxy.newProxyInstance(ipm.getClassLoader(), new Class<?>[] {ipm},
-                    new PackageManagerHook(current, host.getPackageName(), runtime));
+                    new PackageManagerHook(current, host.getPackageName(), runtime, host));
             Field field = Reflect.field(activityThread, "sPackageManager");
             field.set(null, proxy);
             // ContextImpl caches an ApplicationPackageManager that holds the binder proxy directly.
@@ -75,13 +79,100 @@ final class PackageManagerHook implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        if (args != null && args.length > 0) {
+            String name = method.getName();
+            if ("checkPermission".equals(name) || "checkUidPermission".equals(name)) {
+                return permissionCheck(method, args);
+            }
+            if ("getPermissionFlags".equals(name) || "shouldShowRequestPermissionRationale".equals(name)) {
+                return permissionMetadata(method, args);
+            }
+        }
         try {
             Object result = method.invoke(real, args);
             return rewrite(method.getName(), args, result);
         } catch (InvocationTargetException e) {
-            Object fallback = rewriteMissing(method.getName(), args);
+            Object fallback = rewriteMissing(method, args);
             if (fallback != null) return fallback;
             throw e.getCause();
+        }
+    }
+
+    private Object permissionCheck(Method method, Object[] args) throws Throwable {
+        LoadedPlugin plugin = runtime.current();
+        if (plugin == null || !(args[0] instanceof String)) return invokeReal(method, args);
+        String permission = (String) args[0];
+        if ("checkPermission".equals(method.getName()) && args.length > 1 && args[1] instanceof String) {
+            String packageName = (String) args[1];
+            if (hostPackage.equals(packageName) || plugin.packageName.equals(packageName)) {
+                if (!plugin.requestsPermission(permission)) return PackageManager.PERMISSION_DENIED;
+                Object[] mapped = args.clone();
+                mapped[1] = hostPackage;
+                return invokeReal(method, mapped);
+            }
+        }
+        if ("checkUidPermission".equals(method.getName()) && args.length > 1
+                && args[1] instanceof Integer && ((Integer) args[1]) == Process.myUid()
+                && !plugin.requestsPermission(permission)) {
+            return PackageManager.PERMISSION_DENIED;
+        }
+        return invokeReal(method, args);
+    }
+
+    private Object permissionMetadata(Method method, Object[] args) throws Throwable {
+        LoadedPlugin plugin = runtime.current();
+        if (plugin == null || !(args[0] instanceof String)) return invokeReal(method, args);
+        String permission = (String) args[0];
+        if (!plugin.requestsPermission(permission)) {
+            if ("shouldShowRequestPermissionRationale".equals(method.getName())) return false;
+            return 0;
+        }
+
+        Object[] mapped = args.clone();
+        if (mapped.length > 1 && mapped[1] instanceof String) {
+            String packageName = (String) mapped[1];
+            if (hostPackage.equals(packageName) || plugin.packageName.equals(packageName)) {
+                mapped[1] = hostPackage;
+            }
+        }
+        return invokeReal(method, mapped);
+    }
+
+    private Object invokeReal(Method method, Object[] args) throws Throwable {
+        try {
+            return method.invoke(real, args);
+        } catch (InvocationTargetException e) {
+            throw e.getCause();
+        }
+    }
+
+    private boolean hostPermissionGranted(String permission) {
+        for (Method candidate : real.getClass().getMethods()) {
+            Class<?>[] types = candidate.getParameterTypes();
+            if (!"checkUidPermission".equals(candidate.getName()) || types.length < 2) continue;
+            try {
+                Object result;
+                if (types[0] == String.class && types[1] == int.class) {
+                    result = candidate.invoke(real, permission, Process.myUid());
+                } else if (types[0] == int.class && types[1] == String.class) {
+                    result = types.length == 2
+                            ? candidate.invoke(real, Process.myUid(), permission)
+                            : candidate.invoke(real, Process.myUid(), permission, 0);
+                } else {
+                    continue;
+                }
+                if (result instanceof Integer) {
+                    return ((Integer) result) == PackageManager.PERMISSION_GRANTED;
+                }
+            } catch (ReflectiveOperationException | RuntimeException e) {
+                Log.w(TAG, "cannot query host permission " + permission + ": " + e);
+            }
+        }
+        try {
+            return hostContext.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "context permission check failed for " + permission + ": " + e);
+            return false;
         }
     }
 
@@ -106,12 +197,14 @@ final class PackageManagerHook implements InvocationHandler {
                 return pluginActivityResolve(args[0]);
             }
             case "getApplicationInfo":
-                if (hostPackage.equals(args[0]) && result instanceof ApplicationInfo) {
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])
+                        && result instanceof ApplicationInfo) {
                     return withPluginMetaData((ApplicationInfo) result);
                 }
                 return result;
             case "getPackageInfo":
-                if (args[0] instanceof String && hostPackage.equals(args[0]) && result instanceof PackageInfo) {
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])
+                        && result instanceof PackageInfo) {
                     return withPluginVersion((PackageInfo) result);
                 }
                 return result;
@@ -121,14 +214,28 @@ final class PackageManagerHook implements InvocationHandler {
     }
 
     /** The real call threw (e.g. NameNotFound wrapped by the binder layer): answer plugin components anyway. */
-    private Object rewriteMissing(String name, Object[] args) {
+    private Object rewriteMissing(Method method, Object[] args) throws Throwable {
         if (args == null || args.length == 0) return null;
+        String name = method.getName();
         switch (name) {
             case "getServiceInfo":
             case "getActivityInfo":
             case "getReceiverInfo":
             case "getProviderInfo":
                 return pluginComponent(name, args[0]);
+            case "getApplicationInfo":
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])) {
+                    return withPluginMetaData(null);
+                }
+                return null;
+            case "getPackageInfo":
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])) {
+                    return withPluginVersion(null);
+                }
+                return null;
+            case "getPermissionFlags":
+            case "shouldShowRequestPermissionRationale":
+                return permissionMetadata(method, args);
             default:
                 return null;
         }
@@ -184,24 +291,55 @@ final class PackageManagerHook implements InvocationHandler {
         }
     }
 
+    /** Deep-copy PackageInfo using its public Parcelable contract (no hidden copy constructor). */
+    private static PackageInfo copyPackageInfo(PackageInfo source) {
+        Parcel parcel = Parcel.obtain();
+        try {
+            source.writeToParcel(parcel, 0);
+            parcel.setDataPosition(0);
+            return PackageInfo.CREATOR.createFromParcel(parcel);
+        } finally {
+            parcel.recycle();
+        }
+    }
+
     private ApplicationInfo withPluginMetaData(ApplicationInfo hostInfo) {
         LoadedPlugin p = runtime.current();
         if (p == null) return hostInfo;
-        ApplicationInfo copy = new ApplicationInfo(hostInfo);
-        copy.metaData = p.appInfo.metaData;
+        ApplicationInfo copy = new ApplicationInfo(p.appInfo);
+        copy.uid = Process.myUid();
         return copy;
     }
 
     private PackageInfo withPluginVersion(PackageInfo hostInfo) {
         LoadedPlugin p = runtime.current();
         if (p == null) return hostInfo;
-        hostInfo.versionName = p.info.versionName;
+        PackageInfo copy = copyPackageInfo(p.info);
+        copy.applicationInfo = new ApplicationInfo(p.appInfo);
+        copy.versionName = p.info.versionName;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            hostInfo.setLongVersionCode(p.info.getLongVersionCode());
+            copy.setLongVersionCode(p.info.getLongVersionCode());
         } else {
-            hostInfo.versionCode = p.info.versionCode;
+            copy.versionCode = p.info.versionCode;
         }
-        if (hostInfo.applicationInfo != null) hostInfo.applicationInfo = withPluginMetaData(hostInfo.applicationInfo);
-        return hostInfo;
+        copy.requestedPermissions = p.info.requestedPermissions != null
+                ? p.info.requestedPermissions.clone() : null;
+        if (copy.requestedPermissions != null) {
+            int[] flags = new int[copy.requestedPermissions.length];
+            int[] archiveFlags = p.info.requestedPermissionsFlags;
+            for (int i = 0; i < flags.length; i++) {
+                if (archiveFlags != null && i < archiveFlags.length) {
+                    flags[i] = archiveFlags[i] & ~PackageInfo.REQUESTED_PERMISSION_GRANTED;
+                }
+                if (hostPermissionGranted(copy.requestedPermissions[i])) {
+                    flags[i] |= PackageInfo.REQUESTED_PERMISSION_GRANTED;
+                }
+            }
+            copy.requestedPermissionsFlags = flags;
+        } else {
+            copy.requestedPermissionsFlags = null;
+        }
+        if (copy.applicationInfo != null) copy.applicationInfo = withPluginMetaData(copy.applicationInfo);
+        return copy;
     }
 }

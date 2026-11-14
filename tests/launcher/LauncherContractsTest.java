@@ -40,6 +40,36 @@ public final class LauncherContractsTest {
         return apk;
     }
 
+    private static void testPermissionPolicy() {
+        check(!PluginPermissionPolicy.requests(null, "android.permission.CAMERA"),
+                "missing manifest permissions must be denied");
+        check(!PluginPermissionPolicy.requests(new String[0], "android.permission.CAMERA"),
+                "empty manifest permissions must be denied");
+        String[] requested = {"android.permission.CAMERA", "android.permission.RECORD_AUDIO"};
+        check(PluginPermissionPolicy.requests(requested, "android.permission.CAMERA"),
+                "declared permission must be visible");
+        check(!PluginPermissionPolicy.requests(requested, "android.permission.ACCESS_FINE_LOCATION"),
+                "undeclared permission must not be visible");
+        check(PluginPermissionPolicy.firstUndeclared(requested,
+                        new String[] {"android.permission.CAMERA", "android.permission.RECORD_AUDIO"}) == null,
+                "all declared runtime permissions may be requested");
+        check("android.permission.ACCESS_FINE_LOCATION".equals(
+                        PluginPermissionPolicy.firstUndeclared(requested,
+                                new String[] {"android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION"})),
+                "mixed request must identify its first undeclared permission");
+        check(PluginPermissionPolicy.firstUndeclared(requested, new String[0]) == null,
+                "empty request is left for framework validation");
+        check("com.zettabridge.launcher".equals(PluginPermissionPolicy.mapPackageToHost(
+                        "com.example.plugin", "com.zettabridge.launcher", "com.example.plugin")),
+                "plugin package maps to the installed host package");
+        check("com.zettabridge.launcher".equals(PluginPermissionPolicy.mapPackageToHost(
+                        "com.zettabridge.launcher", "com.zettabridge.launcher", "com.example.plugin")),
+                "host package remains unchanged");
+        check(PluginPermissionPolicy.mapPackageToHost(
+                        "com.example.other", "com.zettabridge.launcher", "com.example.plugin") == null,
+                "unrelated packages are not remapped");
+    }
+
     private static void testAbiPriority() {
         Set<String> all = new HashSet<>(Arrays.asList("x86", "armeabi", "armeabi-v7a", "arm64-v8a"));
         check("arm64-v8a".equals(PluginFiles.selectAbi(all)), "arm64 must win");
@@ -150,6 +180,7 @@ public final class LauncherContractsTest {
     public static void main(String[] args) throws Exception {
         File root = Files.createTempDirectory("zb-launcher-contracts-").toFile();
         try {
+            testPermissionPolicy();
             testAbiPriority();
             testNamesAndDelegation();
             testExtractionAndMetadata(root);

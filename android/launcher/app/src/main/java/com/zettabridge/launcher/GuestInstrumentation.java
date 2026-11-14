@@ -22,6 +22,10 @@ import java.lang.reflect.Method;
  */
 final class GuestInstrumentation extends Instrumentation {
     private static final String TAG = "zb-launcher";
+    private static final String ACTION_REQUEST_PERMISSIONS =
+            "android.content.pm.action.REQUEST_PERMISSIONS";
+    private static final String EXTRA_REQUEST_PERMISSIONS_NAMES =
+            "android.content.pm.extra.REQUEST_PERMISSIONS_NAMES";
 
     private final GuestRuntime runtime;
     private final Instrumentation base;
@@ -74,6 +78,7 @@ final class GuestInstrumentation extends Instrumentation {
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("Instrumentation.execStartActivity not found", e);
         }
+        enforcePluginPermissionRequest(who, target, intent);
         Intent routed = runtime.route(intent);
         return (ActivityResult) Reflect.invoke(execStartActivity, base, who, contextThread, token, target, routed,
                 requestCode, options);
@@ -89,9 +94,26 @@ final class GuestInstrumentation extends Instrumentation {
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("Instrumentation.execStartActivity(String) not found", e);
         }
+        enforcePluginPermissionRequest(who, null, intent);
         Intent routed = runtime.route(intent);
         return (ActivityResult) Reflect.invoke(execStartActivityFromString, base, who, contextThread, token, target,
                 routed, requestCode, options);
+    }
+
+    private void enforcePluginPermissionRequest(Context who, Activity target, Intent intent) {
+        if (intent == null || !ACTION_REQUEST_PERMISSIONS.equals(intent.getAction())) return;
+        LoadedPlugin plugin = target != null ? runtime.pluginOf(target) : null;
+        if (plugin == null && who instanceof Activity) plugin = runtime.pluginOf((Activity) who);
+        if (plugin == null && who instanceof PluginContext) plugin = ((PluginContext) who).plugin();
+        if (plugin == null) return;
+
+        String[] requested = intent.getStringArrayExtra(EXTRA_REQUEST_PERMISSIONS_NAMES);
+        String undeclared = PluginPermissionPolicy.firstUndeclared(
+                plugin.info != null ? plugin.info.requestedPermissions : null, requested);
+        if (undeclared != null) {
+            throw new SecurityException("Plugin " + plugin.packageName
+                    + " requested undeclared permission " + undeclared);
+        }
     }
 
     public void execStartActivities(Context who, IBinder contextThread, IBinder token, Activity target,

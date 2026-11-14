@@ -22,7 +22,8 @@ import com.zettabridge.core.ZBridge;
 /** Imported plugins on disk. Import is staged and published only after every native fixup succeeds. */
 final class PluginStore {
     static final int ARCHIVE_FLAGS = PackageManager.GET_ACTIVITIES | PackageManager.GET_PROVIDERS
-            | PackageManager.GET_SERVICES | PackageManager.GET_RECEIVERS | PackageManager.GET_META_DATA;
+            | PackageManager.GET_SERVICES | PackageManager.GET_RECEIVERS | PackageManager.GET_META_DATA
+            | PackageManager.GET_PERMISSIONS;
 
     private PluginStore() {}
 

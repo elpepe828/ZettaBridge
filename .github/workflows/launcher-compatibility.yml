@@ -1,0 +1,46 @@
+name: Launcher compatibility tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "android/launcher/app/src/main/**"
+      - "tests/launcher/**"
+      - ".github/workflows/launcher-compatibility.yml"
+  push:
+    branches: [codex/permission-compatibility-layer]
+    paths:
+      - "android/launcher/app/src/main/**"
+      - "tests/launcher/**"
+      - ".github/workflows/launcher-compatibility.yml"
+
+jobs:
+  launcher:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools'
+
+      - name: Install Android API 36
+        run: sdkmanager "platforms;android-36"
+
+      - name: Run launcher contract tests
+        env:
+          ANDROID_JAR: ${{ env.ANDROID_HOME }}/platforms/android-36/android.jar
+        run: tests/launcher/run_tests.sh
+
+      - name: Compile all launcher Java sources
+        env:
+          ANDROID_JAR: ${{ env.ANDROID_HOME }}/platforms/android-36/android.jar
+        run: tests/launcher/compile_launcher.sh

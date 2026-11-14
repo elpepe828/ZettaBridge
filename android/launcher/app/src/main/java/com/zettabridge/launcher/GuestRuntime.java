@@ -69,6 +69,7 @@ final class GuestRuntime {
             installed = true;
             Log.i(TAG, "guest Instrumentation installed");
             PackageManagerHook.install(app, this);
+            PermissionManagerHook.install(app, this);
         } catch (ReflectiveOperationException | RuntimeException e) {
             Log.e(TAG, "cannot install the guest Instrumentation; plugins will not launch", e);
         }
@@ -204,7 +205,7 @@ final class GuestRuntime {
         }
     }
 
-    private synchronized LoadedPlugin pluginOf(Activity activity) {
+    synchronized LoadedPlugin pluginOf(Activity activity) {
         ClassLoader cl = activity.getClass().getClassLoader();
         for (LoadedPlugin p : plugins.values()) {
             if (p.classLoader == cl) return p;
