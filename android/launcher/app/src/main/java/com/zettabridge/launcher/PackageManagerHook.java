@@ -106,15 +106,35 @@ final class PackageManagerHook implements InvocationHandler {
                 return pluginActivityResolve(args[0]);
             }
             case "getApplicationInfo":
-                if (hostPackage.equals(args[0]) && result instanceof ApplicationInfo) {
+                if (args[0] instanceof String && isCurrentPluginOrHostPackage((String) args[0])
+                        && result instanceof ApplicationInfo) {
                     return withPluginMetaData((ApplicationInfo) result);
                 }
                 return result;
             case "getPackageInfo":
-                if (args[0] instanceof String && hostPackage.equals(args[0]) && result instanceof PackageInfo) {
+                if (args[0] instanceof String && isCurrentPluginOrHostPackage((String) args[0])
+                        && result instanceof PackageInfo) {
                     return withPluginVersion((PackageInfo) result);
                 }
                 return result;
+            case "checkPermission": {
+                LoadedPlugin p = runtime.current();
+                if (p != null && p.application != null && args.length >= 2
+                        && args[0] instanceof String && args[1] instanceof String
+                        && isCurrentPluginOrHostPackage((String) args[1])) {
+                    return p.application.checkSelfPermission((String) args[0]);
+                }
+                return result;
+            }
+            case "checkUidPermission": {
+                LoadedPlugin p = runtime.current();
+                if (p != null && p.application != null && args.length >= 2
+                        && args[0] instanceof String && args[1] instanceof Integer
+                        && ((Integer) args[1]) == android.os.Process.myUid()) {
+                    return p.application.checkSelfPermission((String) args[0]);
+                }
+                return result;
+            }
             default:
                 return result;
         }
@@ -129,6 +149,36 @@ final class PackageManagerHook implements InvocationHandler {
             case "getReceiverInfo":
             case "getProviderInfo":
                 return pluginComponent(name, args[0]);
+            case "getApplicationInfo": {
+                if (!(args[0] instanceof String) || !isCurrentPluginOrHostPackage((String) args[0])) {
+                    return null;
+                }
+                LoadedPlugin p = runtime.current();
+                return p != null ? withPluginMetaData(p.appInfo) : null;
+            }
+            case "getPackageInfo": {
+                if (!(args[0] instanceof String) || !isCurrentPluginOrHostPackage((String) args[0])) {
+                    return null;
+                }
+                LoadedPlugin p = runtime.current();
+                return p != null ? withPluginVersion(p.info) : null;
+            }
+            case "checkPermission": {
+                if (args.length < 2 || !(args[0] instanceof String) || !(args[1] instanceof String)
+                        || !isCurrentPluginOrHostPackage((String) args[1])) return null;
+                LoadedPlugin p = runtime.current();
+                return p != null && p.application != null
+                        ? p.application.checkSelfPermission((String) args[0])
+                        : PackageManager.PERMISSION_DENIED;
+            }
+            case "checkUidPermission": {
+                if (args.length < 2 || !(args[0] instanceof String) || !(args[1] instanceof Integer)
+                        || ((Integer) args[1]) != android.os.Process.myUid()) return null;
+                LoadedPlugin p = runtime.current();
+                return p != null && p.application != null
+                        ? p.application.checkSelfPermission((String) args[0])
+                        : PackageManager.PERMISSION_DENIED;
+            }
             default:
                 return null;
         }
@@ -184,24 +234,22 @@ final class PackageManagerHook implements InvocationHandler {
         }
     }
 
-    private ApplicationInfo withPluginMetaData(ApplicationInfo hostInfo) {
+    private boolean isCurrentPluginOrHostPackage(String packageName) {
+        if (hostPackage.equals(packageName)) return true;
         LoadedPlugin p = runtime.current();
-        if (p == null) return hostInfo;
-        ApplicationInfo copy = new ApplicationInfo(hostInfo);
-        copy.metaData = p.appInfo.metaData;
-        return copy;
+        return p != null && p.packageName.equals(packageName);
     }
 
-    private PackageInfo withPluginVersion(PackageInfo hostInfo) {
+    private ApplicationInfo withPluginMetaData(ApplicationInfo ignoredHostInfo) {
         LoadedPlugin p = runtime.current();
-        if (p == null) return hostInfo;
-        hostInfo.versionName = p.info.versionName;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            hostInfo.setLongVersionCode(p.info.getLongVersionCode());
-        } else {
-            hostInfo.versionCode = p.info.versionCode;
-        }
-        if (hostInfo.applicationInfo != null) hostInfo.applicationInfo = withPluginMetaData(hostInfo.applicationInfo);
-        return hostInfo;
+        return p != null ? new ApplicationInfo(p.appInfo) : ignoredHostInfo;
+    }
+
+    private PackageInfo withPluginVersion(PackageInfo ignoredHostInfo) {
+        LoadedPlugin p = runtime.current();
+        if (p == null || p.info == null) return ignoredHostInfo;
+        PackageInfo copy = new PackageInfo(p.info);
+        copy.applicationInfo = new ApplicationInfo(p.appInfo);
+        return copy;
     }
 }
