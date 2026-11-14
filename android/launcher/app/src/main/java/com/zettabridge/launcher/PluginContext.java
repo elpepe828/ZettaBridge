@@ -55,6 +55,48 @@ final class PluginContext extends ContextWrapper {
         return new PluginContext(frameworkContext, plugin, pluginResources);
     }
 
+    /**
+     * Present the guest package name to app code while preserving the launcher's operation
+     * package for framework services that validate package/UID ownership.
+     */
+    @Override
+    public String getPackageName() {
+        return plugin.packageName;
+    }
+
+    @Override
+    public String getOpPackageName() {
+        return getBaseContext().getOpPackageName();
+    }
+
+    @Override
+    public int checkSelfPermission(String permission) {
+        return PluginPermissionManager.checkSelfPermission(this, plugin, permission);
+    }
+
+    @Override
+    public int checkPermission(String permission, int pid, int uid) {
+        return PluginPermissionManager.checkPermission(this, plugin, permission, pid, uid);
+    }
+
+    @Override
+    public int checkCallingPermission(String permission) {
+        if (android.os.Binder.getCallingPid() == android.os.Process.myPid()
+                && android.os.Binder.getCallingUid() == android.os.Process.myUid()) {
+            return checkSelfPermission(permission);
+        }
+        return getBaseContext().checkCallingPermission(permission);
+    }
+
+    @Override
+    public int checkCallingOrSelfPermission(String permission) {
+        if (android.os.Binder.getCallingPid() == android.os.Process.myPid()
+                && android.os.Binder.getCallingUid() == android.os.Process.myUid()) {
+            return checkSelfPermission(permission);
+        }
+        return getBaseContext().checkCallingOrSelfPermission(permission);
+    }
+
     @Override
     public Resources getResources() {
         return resources;
