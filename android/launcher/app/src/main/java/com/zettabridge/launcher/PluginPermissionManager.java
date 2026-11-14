@@ -5,7 +5,6 @@ import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
-import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PermissionInfo;
 import android.os.Build;
@@ -72,18 +71,9 @@ final class PluginPermissionManager {
         if ("android.permission.ACTIVITY_RECOGNITION".equals(permission) && sdk < 29) return false;
         if ("android.permission.POST_NOTIFICATIONS".equals(permission) && sdk < 33) return false;
 
-        // Never ask Android to grant a permission that this launcher APK did not actually declare.
-        try {
-            PackageInfo info = context.getPackageManager().getPackageInfo(
-                    context.getPackageName(), PackageManager.GET_PERMISSIONS);
-            if (info.requestedPermissions == null) return false;
-            for (String declared : info.requestedPermissions) {
-                if (permission.equals(declared)) return true;
-            }
-        } catch (PackageManager.NameNotFoundException | RuntimeException e) {
-            return false;
-        }
-        return false;
+        // This explicit allowlist is kept in sync with the launcher manifest. Do not query
+        // PackageManager here: its guest-process hook intentionally answers as the plugin.
+        return true;
     }
 
     static boolean isDangerousPermission(Context context, String permission) {
