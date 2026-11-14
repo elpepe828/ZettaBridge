@@ -59,6 +59,15 @@ public final class LauncherContractsTest {
                 "mixed request must identify its first undeclared permission");
         check(PluginPermissionPolicy.firstUndeclared(requested, new String[0]) == null,
                 "empty request is left for framework validation");
+        check("com.zettabridge.launcher".equals(PluginPermissionPolicy.mapPackageToHost(
+                        "com.example.plugin", "com.zettabridge.launcher", "com.example.plugin")),
+                "plugin package maps to the installed host package");
+        check("com.zettabridge.launcher".equals(PluginPermissionPolicy.mapPackageToHost(
+                        "com.zettabridge.launcher", "com.zettabridge.launcher", "com.example.plugin")),
+                "host package remains unchanged");
+        check(PluginPermissionPolicy.mapPackageToHost(
+                        "com.example.other", "com.zettabridge.launcher", "com.example.plugin") == null,
+                "unrelated packages are not remapped");
     }
 
     private static void testAbiPriority() {
