@@ -33,6 +33,10 @@ final class PluginRecord {
     boolean preciseFaults = false;
     /** Debugging: GL instrumentation (framebuffer readbacks, per-draw pixel diffs). Very slow. */
     boolean diagnostics = false;
+    /** Permissions declared in the imported APK manifest. */
+    final Set<String> requestedPermissions = new TreeSet<>();
+    /** Dangerous permissions explicitly enabled for this plugin in ZettaBridge. */
+    final Set<String> grantedPermissions = new TreeSet<>();
     /** Every ABI directory found under lib/ in the APK. */
     final Set<String> abis = new TreeSet<>();
 
@@ -88,6 +92,20 @@ final class PluginRecord {
         return "unsupported ABIs: " + abis;
     }
 
+    boolean hasRequestedPermission(String permission) {
+        return permission != null && requestedPermissions.contains(permission);
+    }
+
+    boolean hasGrantedPermission(String permission) {
+        return permission != null && grantedPermissions.contains(permission);
+    }
+
+    void setPermissionGranted(String permission, boolean granted) {
+        if (permission == null || !requestedPermissions.contains(permission)) return;
+        if (granted) grantedPermissions.add(permission);
+        else grantedPermissions.remove(permission);
+    }
+
     synchronized Bitmap icon() {
         if (!iconLoaded) {
             iconLoaded = true;
@@ -104,6 +122,8 @@ final class PluginRecord {
         if (versionName != null) p.setProperty("version", versionName);
         p.setProperty("targetSdk", Integer.toString(targetSdk));
         p.setProperty("abis", String.join(",", abis));
+        p.setProperty("requestedPermissions", String.join(",", requestedPermissions));
+        p.setProperty("grantedPermissions", String.join(",", grantedPermissions));
         if (selectedAbi != null) p.setProperty("selectedAbi", selectedAbi);
         p.setProperty("hideAds", Boolean.toString(hideAds));
         p.setProperty("preciseFaults", Boolean.toString(preciseFaults));
@@ -135,6 +155,14 @@ final class PluginRecord {
         }
         for (String abi : p.getProperty("abis", "").split(",")) {
             if (!abi.isEmpty()) r.abis.add(abi);
+        }
+        for (String permission : p.getProperty("requestedPermissions", "").split(",")) {
+            if (!permission.isEmpty()) r.requestedPermissions.add(permission);
+        }
+        for (String permission : p.getProperty("grantedPermissions", "").split(",")) {
+            if (!permission.isEmpty() && r.requestedPermissions.contains(permission)) {
+                r.grantedPermissions.add(permission);
+            }
         }
         r.selectedAbi = p.getProperty("selectedAbi");
         r.hideAds = !"false".equals(p.getProperty("hideAds"));
