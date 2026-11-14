@@ -213,7 +213,7 @@ public class LibraryActivity extends Activity {
     private void showActions(PluginRecord r) {
         new AlertDialog.Builder(this)
                 .setTitle(r.label)
-                .setItems(new String[] {"Launch", "Last run report", "Pin shortcut",
+                .setItems(new String[] {"Launch", "Last run report", "Pin shortcut", "Permissions",
                                         r.hideAds ? "Show ads" : "Hide ads",
                                         r.preciseFaults ? "Precise faults: on" : "Precise faults (slow)",
                                         r.diagnostics ? "GL diagnostics: on" : "GL diagnostics (slow)",
@@ -222,12 +222,19 @@ public class LibraryActivity extends Activity {
                             if (which == 0) launch(r);
                             if (which == 1) showRuntimeReport(r);
                             if (which == 2) pinShortcut(r);
-                            if (which == 3) toggleAds(r);
-                            if (which == 4) togglePreciseFaults(r);
-                            if (which == 5) toggleDiagnostics(r);
-                            if (which == 6) confirmDelete(r);
+                            if (which == 3) managePermissions(r);
+                            if (which == 4) toggleAds(r);
+                            if (which == 5) togglePreciseFaults(r);
+                            if (which == 6) toggleDiagnostics(r);
+                            if (which == 7) confirmDelete(r);
                         })
                 .show();
+    }
+
+    /** Stop the guest process so permission edits are read from fresh metadata at next launch. */
+    private void managePermissions(PluginRecord r) {
+        stopGuestProcess();
+        startActivity(PluginPermissionsActivity.intent(this, r.packageName));
     }
 
     /** Ads are hidden per plugin; it takes effect the next time the plugin process starts. */
