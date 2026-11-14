@@ -61,6 +61,17 @@ final class GuestInstrumentation extends Instrumentation {
         runtime.onActivityDestroyed(activity);
     }
 
+    @Override
+    public void callActivityOnRequestPermissionsResult(Activity activity, int requestCode,
+                                                        String[] permissions, int[] grantResults) {
+        LoadedPlugin plugin = runtime.pluginOf(activity);
+        if (plugin != null) {
+            grantResults = PluginPermissionPolicy.filterGrantResults(
+                    plugin.info != null ? plugin.info.requestedPermissions : null, permissions, grantResults);
+        }
+        base.callActivityOnRequestPermissionsResult(activity, requestCode, permissions, grantResults);
+    }
+
     // Hidden framework entry points of Activity.startActivity and Context.startActivity. They are
     // not in the SDK stubs, so these only override at runtime; the originals are called on base.
 
