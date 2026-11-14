@@ -91,7 +91,7 @@ public final class PluginPermissionsActivity extends Activity {
     private void addPermissionRow(String permission) {
         boolean dangerous = PluginPermissionManager.isDangerousPermission(this, permission);
         boolean supported = dangerous
-                && PluginPermissionManager.isSupportedRuntimePermission(permission);
+                && PluginPermissionManager.isSupportedRuntimePermission(this, permission);
         boolean androidGranted = checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
         boolean guestGranted = record.hasGrantedPermission(permission);
 
