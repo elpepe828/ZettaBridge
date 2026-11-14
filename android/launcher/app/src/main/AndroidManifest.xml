@@ -112,6 +112,11 @@
             android:taskAffinity="com.zettabridge.launcher.guest"
             android:theme="@android:style/Theme.NoDisplay" />
 
+        <!-- User-facing permission status and special-access settings for imported APKs. -->
+        <activity
+            android:name=".PluginPermissionsActivity"
+            android:exported="false" />
+
         <!-- Stub pool. GuestInstrumentation replaces each with the plugin activity named in the intent. -->
         <activity
             android:name=".Stubs$Standard"
