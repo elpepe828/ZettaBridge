@@ -10,7 +10,9 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.DatabaseErrorHandler;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Binder;
 import android.os.Bundle;
+import android.os.Process;
 import android.view.Display;
 import android.view.LayoutInflater;
 
@@ -88,6 +90,22 @@ final class PluginContext extends ContextWrapper {
     @Override
     public Context getApplicationContext() {
         return plugin.application != null ? plugin.application : super.getApplicationContext();
+    }
+
+    /** A plugin cannot observe host permissions that its own APK did not request. */
+    @Override
+    public int checkSelfPermission(String permission) {
+        if (!plugin.requestsPermission(permission)) return PackageManager.PERMISSION_DENIED;
+        return super.checkSelfPermission(permission);
+    }
+
+    /** Keep explicit pid/uid checks consistent with checkSelfPermission for this process. */
+    @Override
+    public int checkPermission(String permission, int pid, int uid) {
+        if (pid == Process.myPid() && uid == Process.myUid() && !plugin.requestsPermission(permission)) {
+            return PackageManager.PERMISSION_DENIED;
+        }
+        return super.checkPermission(permission, pid, uid);
     }
 
     // Derived contexts.
