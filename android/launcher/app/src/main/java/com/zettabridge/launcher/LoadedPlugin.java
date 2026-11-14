@@ -53,6 +53,10 @@ final class LoadedPlugin {
         this.classLoader = classLoader;
     }
 
+    boolean requestsPermission(String permission) {
+        return PluginPermissionPolicy.requests(info != null ? info.requestedPermissions : null, permission);
+    }
+
     Bitmap icon() {
         return record.icon();
     }
