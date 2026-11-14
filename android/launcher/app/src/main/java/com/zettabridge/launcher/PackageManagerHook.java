@@ -89,7 +89,7 @@ final class PackageManagerHook implements InvocationHandler {
             Object result = method.invoke(real, args);
             return rewrite(method.getName(), args, result);
         } catch (InvocationTargetException e) {
-            Object fallback = rewriteMissing(method.getName(), args);
+            Object fallback = rewriteMissing(method, args);
             if (fallback != null) return fallback;
             throw e.getCause();
         }
@@ -197,14 +197,28 @@ final class PackageManagerHook implements InvocationHandler {
     }
 
     /** The real call threw (e.g. NameNotFound wrapped by the binder layer): answer plugin components anyway. */
-    private Object rewriteMissing(String name, Object[] args) {
+    private Object rewriteMissing(Method method, Object[] args) {
         if (args == null || args.length == 0) return null;
+        String name = method.getName();
         switch (name) {
             case "getServiceInfo":
             case "getActivityInfo":
             case "getReceiverInfo":
             case "getProviderInfo":
                 return pluginComponent(name, args[0]);
+            case "getApplicationInfo":
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])) {
+                    return withPluginMetaData(null);
+                }
+                return null;
+            case "getPackageInfo":
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])) {
+                    return withPluginVersion(null);
+                }
+                return null;
+            case "getPermissionFlags":
+            case "shouldShowRequestPermissionRationale":
+                return permissionMetadata(method, args);
             default:
                 return null;
         }
