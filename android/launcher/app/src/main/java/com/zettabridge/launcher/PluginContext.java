@@ -116,6 +116,22 @@ final class PluginContext extends ContextWrapper {
         return super.checkCallingOrSelfPermission(permission);
     }
 
+    @Override
+    public void enforcePermission(String permission, int pid, int uid, String message) {
+        if (checkPermission(permission, pid, uid) != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException(message != null ? message : "Permission denied: " + permission);
+        }
+        super.enforcePermission(permission, pid, uid, message);
+    }
+
+    @Override
+    public void enforceCallingOrSelfPermission(String permission, String message) {
+        if (checkCallingOrSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException(message != null ? message : "Permission denied: " + permission);
+        }
+        super.enforceCallingOrSelfPermission(permission, message);
+    }
+
     // Derived contexts.
 
     @Override
