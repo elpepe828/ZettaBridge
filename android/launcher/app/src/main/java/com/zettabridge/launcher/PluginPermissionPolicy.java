@@ -18,15 +18,4 @@ final class PluginPermissionPolicy {
         return false;
     }
 
-    static int[] filterGrantResults(String[] requestedPermissions, String[] returnedPermissions,
-                                    int[] grantResults) {
-        if (grantResults == null) return null;
-        int[] filtered = grantResults.clone();
-        if (returnedPermissions == null) return filtered;
-        int count = Math.min(returnedPermissions.length, filtered.length);
-        for (int i = 0; i < count; i++) {
-            if (!requests(requestedPermissions, returnedPermissions[i])) filtered[i] = -1;
-        }
-        return filtered;
-    }
 }
