@@ -50,6 +50,15 @@ public final class LauncherContractsTest {
                 "declared permission must be visible");
         check(!PluginPermissionPolicy.requests(requested, "android.permission.ACCESS_FINE_LOCATION"),
                 "undeclared permission must not be visible");
+        check(PluginPermissionPolicy.firstUndeclared(requested,
+                        new String[] {"android.permission.CAMERA", "android.permission.RECORD_AUDIO"}) == null,
+                "all declared runtime permissions may be requested");
+        check("android.permission.ACCESS_FINE_LOCATION".equals(
+                        PluginPermissionPolicy.firstUndeclared(requested,
+                                new String[] {"android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION"})),
+                "mixed request must identify its first undeclared permission");
+        check(PluginPermissionPolicy.firstUndeclared(requested, new String[0]) == null,
+                "empty request is left for framework validation");
     }
 
     private static void testAbiPriority() {
