@@ -16,10 +16,6 @@ In the `:guest` process:
   manifest-scoped result for the active plugin.
 - `PackageInfo.requestedPermissions` and `requestedPermissionsFlags` are populated
   from the APK manifest and the launcher's actual grant state.
-- Runtime permission results are forwarded through the original
-  `Instrumentation`; results for permissions absent from the plugin manifest are
-  converted to denied.
-
 This covers the usual camera, microphone, foreground location, media, contacts,
 calendar, phone, SMS, notification, sensor and nearby-device permission checks.
 The standard Android permission dialog is still the platform dialog for **ZettaBridge**.
