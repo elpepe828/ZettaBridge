@@ -1868,13 +1868,15 @@ Implemented on `codex/permission-compatibility-layer`:
 
 - APK parsing now requests `PackageInfo.requestedPermissions`.
 - Plugin `Context` and `PackageManager` checks are filtered against the active APK's
-  declared permissions; permission callbacks are delegated to the original Instrumentation.
+  declared permissions. The Instrumentation start-activity hooks reject runtime permission
+  requests for permissions absent from the plugin manifest; accepted requests continue through
+  Android's native Activity result/callback path.
 - PackageInfo reports the plugin's requested permissions and the launcher's actual UID grant
   state.
 - The launcher manifest declares a broad compatibility set for common runtime and special
   permissions. Special-access Settings flows, AppOps attribution and true per-plugin isolation
   remain open; see `docs/permission-compatibility.md`.
-- Added pure-Java contract tests for manifest membership and permission-result filtering.
+- Added pure-Java contract tests for manifest membership and undeclared permission request rejection.
 
 Required next validation: `tests/launcher/run_tests.sh`, `tests/launcher/compile_launcher.sh`,
 Android launcher build, then device tests for grant/deny and callback behavior (camera,
