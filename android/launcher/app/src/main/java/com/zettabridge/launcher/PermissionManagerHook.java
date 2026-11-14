@@ -32,30 +32,72 @@ final class PermissionManagerHook implements InvocationHandler {
     }
 
     static void install(Context host, GuestRuntime runtime) {
+        boolean installed = false;
+        Class<?> permissionManagerInterface;
+        try {
+            permissionManagerInterface = Class.forName("android.permission.IPermissionManager");
+        } catch (ClassNotFoundException e) {
+            Log.i(TAG, "separate permission manager is unavailable on this Android release");
+            return;
+        }
+
+        // Route used by framework code that obtains the service through ActivityThread.
         try {
             Class<?> activityThread = Class.forName("android.app.ActivityThread");
             Object current = Reflect.method(activityThread, "getPermissionManager").invoke(null);
-            if (current == null || Proxy.isProxyClass(current.getClass())) return;
-
-            Class<?> permissionManager = Class.forName("android.permission.IPermissionManager");
-            if (!permissionManager.isInstance(current)) {
-                Log.w(TAG, "ActivityThread returned an unexpected permission manager: "
-                        + current.getClass().getName());
-                return;
-            }
-
-            Object proxy = Proxy.newProxyInstance(permissionManager.getClassLoader(),
-                    new Class<?>[] {permissionManager},
-                    new PermissionManagerHook(current, host.getPackageName(), runtime));
             Field field = Reflect.field(activityThread, "sPermissionManager");
-            field.set(null, proxy);
-            Log.i(TAG, "permission manager virtualization installed");
+            Object proxy = wrap(permissionManagerInterface, current, host, runtime);
+            if (proxy != null && proxy != current) {
+                field.set(null, proxy);
+                installed = true;
+            } else if (proxy == current && proxy != null) {
+                installed = true;
+            }
         } catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException e) {
-            // Older Android releases keep these methods on IPackageManager instead.
-            Log.i(TAG, "separate permission manager is unavailable on this Android release: " + e);
+            // Some Android releases keep permission metadata on IPackageManager.
+            Log.i(TAG, "ActivityThread permission manager hook is unavailable: " + e);
         } catch (ReflectiveOperationException | RuntimeException e) {
-            Diagnostics.report(host, "cannot install permission manager virtualization", e, false);
+            Log.w(TAG, "cannot hook ActivityThread permission manager: " + e);
         }
+
+        // PackageManager/PermissionManager may hold its own cached binder reference. Hook that
+        // service instance too; changing only ActivityThread.sPermissionManager is not sufficient
+        // on releases where PermissionManager constructs the AIDL proxy from ServiceManager.
+        try {
+            Class<?> serviceClass = Class.forName("android.permission.PermissionManager");
+            Method getSystemService = Reflect.method(Context.class, "getSystemService", Class.class);
+            Object service = getSystemService.invoke(host, serviceClass);
+            if (service != null) {
+                Field field = Reflect.field(serviceClass, "mPermissionManager");
+                Object current = field.get(service);
+                Object proxy = wrap(permissionManagerInterface, current, host, runtime);
+                if (proxy != null && proxy != current) {
+                    field.set(service, proxy);
+                    installed = true;
+                } else if (proxy == current && proxy != null) {
+                    installed = true;
+                }
+            }
+        } catch (ClassNotFoundException | NoSuchMethodException | NoSuchFieldException e) {
+            Log.i(TAG, "PermissionManager service instance hook is unavailable: " + e);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            Log.w(TAG, "cannot hook PermissionManager service instance: " + e);
+        }
+
+        Log.i(TAG, installed ? "permission manager virtualization installed"
+                : "permission manager binder hook not installed; IPackageManager fallback remains active");
+    }
+
+    private static Object wrap(Class<?> permissionManagerInterface, Object current,
+                               Context host, GuestRuntime runtime) {
+        if (current == null || !permissionManagerInterface.isInstance(current)) return null;
+        if (Proxy.isProxyClass(current.getClass())) {
+            InvocationHandler handler = Proxy.getInvocationHandler(current);
+            return handler instanceof PermissionManagerHook ? current : null;
+        }
+        return Proxy.newProxyInstance(permissionManagerInterface.getClassLoader(),
+                new Class<?>[] {permissionManagerInterface},
+                new PermissionManagerHook(current, host.getPackageName(), runtime));
     }
 
     @Override
