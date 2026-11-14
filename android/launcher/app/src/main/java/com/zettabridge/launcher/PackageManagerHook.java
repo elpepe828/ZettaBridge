@@ -126,6 +126,17 @@ final class PackageManagerHook implements InvocationHandler {
                 }
                 return result;
             }
+            case "shouldShowRequestPermissionRationale": {
+                LoadedPlugin p = runtime.current();
+                if (p != null && p.application != null && args.length >= 2
+                        && args[0] instanceof String && args[1] instanceof String
+                        && isCurrentPluginOrHostPackage((String) args[1])) {
+                    String permission = (String) args[0];
+                    return p.record.hasAttemptedPermission(permission)
+                            && p.application.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED;
+                }
+                return result;
+            }
             case "checkUidPermission": {
                 LoadedPlugin p = runtime.current();
                 if (p != null && p.application != null && args.length >= 2
