@@ -40,6 +40,23 @@ public final class LauncherContractsTest {
         return apk;
     }
 
+    private static void testPermissionPolicy() {
+        check(!PluginPermissionPolicy.requests(null, "android.permission.CAMERA"),
+                "missing manifest permissions must be denied");
+        check(!PluginPermissionPolicy.requests(new String[0], "android.permission.CAMERA"),
+                "empty manifest permissions must be denied");
+        String[] requested = {"android.permission.CAMERA", "android.permission.RECORD_AUDIO"};
+        check(PluginPermissionPolicy.requests(requested, "android.permission.CAMERA"),
+                "declared permission must be visible");
+        check(!PluginPermissionPolicy.requests(requested, "android.permission.ACCESS_FINE_LOCATION"),
+                "undeclared permission must not be visible");
+        int[] filtered = PluginPermissionPolicy.filterGrantResults(requested,
+                new String[] {"android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION"},
+                new int[] {0, 0});
+        check(filtered[0] == 0 && filtered[1] == -1,
+                "permission result for an undeclared permission must be denied");
+    }
+
     private static void testAbiPriority() {
         Set<String> all = new HashSet<>(Arrays.asList("x86", "armeabi", "armeabi-v7a", "arm64-v8a"));
         check("arm64-v8a".equals(PluginFiles.selectAbi(all)), "arm64 must win");
@@ -150,6 +167,7 @@ public final class LauncherContractsTest {
     public static void main(String[] args) throws Exception {
         File root = Files.createTempDirectory("zb-launcher-contracts-").toFile();
         try {
+            testPermissionPolicy();
             testAbiPriority();
             testNamesAndDelegation();
             testExtractionAndMetadata(root);
