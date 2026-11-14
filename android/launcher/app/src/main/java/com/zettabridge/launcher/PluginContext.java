@@ -81,6 +81,18 @@ final class PluginContext extends ContextWrapper {
         return plugin.appInfo;
     }
 
+    /** Guest code sees the imported APK's package name; OS services retain the host identity. */
+    @Override
+    public String getPackageName() {
+        return plugin.packageName;
+    }
+
+    /** AppOps and package-attribution checks must use the package actually installed for this UID. */
+    @Override
+    public String getOpPackageName() {
+        return getBaseContext().getOpPackageName();
+    }
+
     @Override
     public String getPackageCodePath() {
         return plugin.appInfo.sourceDir;
