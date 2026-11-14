@@ -12,6 +12,7 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
+import android.os.Parcel;
 import android.os.Process;
 import android.util.Log;
 
@@ -290,6 +291,18 @@ final class PackageManagerHook implements InvocationHandler {
         }
     }
 
+    /** Deep-copy PackageInfo using its public Parcelable contract (no hidden copy constructor). */
+    private static PackageInfo copyPackageInfo(PackageInfo source) {
+        Parcel parcel = Parcel.obtain();
+        try {
+            source.writeToParcel(parcel, 0);
+            parcel.setDataPosition(0);
+            return PackageInfo.CREATOR.createFromParcel(parcel);
+        } finally {
+            parcel.recycle();
+        }
+    }
+
     private ApplicationInfo withPluginMetaData(ApplicationInfo hostInfo) {
         LoadedPlugin p = runtime.current();
         if (p == null) return hostInfo;
@@ -301,7 +314,7 @@ final class PackageManagerHook implements InvocationHandler {
     private PackageInfo withPluginVersion(PackageInfo hostInfo) {
         LoadedPlugin p = runtime.current();
         if (p == null) return hostInfo;
-        PackageInfo copy = new PackageInfo(p.info);
+        PackageInfo copy = copyPackageInfo(p.info);
         copy.applicationInfo = new ApplicationInfo(p.appInfo);
         copy.versionName = p.info.versionName;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
