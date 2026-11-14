@@ -36,11 +36,13 @@ final class PackageManagerHook implements InvocationHandler {
     private final Object real;
     private final String hostPackage;
     private final GuestRuntime runtime;
+    private final Context hostContext;
 
-    private PackageManagerHook(Object real, String hostPackage, GuestRuntime runtime) {
+    private PackageManagerHook(Object real, String hostPackage, GuestRuntime runtime, Context hostContext) {
         this.real = real;
         this.hostPackage = hostPackage;
         this.runtime = runtime;
+        this.hostContext = hostContext;
     }
 
     static void install(Context host, GuestRuntime runtime) {
@@ -50,7 +52,7 @@ final class PackageManagerHook implements InvocationHandler {
             if (current == null || Proxy.isProxyClass(current.getClass())) return;
             Class<?> ipm = Class.forName("android.content.pm.IPackageManager");
             Object proxy = Proxy.newProxyInstance(ipm.getClassLoader(), new Class<?>[] {ipm},
-                    new PackageManagerHook(current, host.getPackageName(), runtime));
+                    new PackageManagerHook(current, host.getPackageName(), runtime, host));
             Field field = Reflect.field(activityThread, "sPackageManager");
             field.set(null, proxy);
             // ContextImpl caches an ApplicationPackageManager that holds the binder proxy directly.
@@ -146,17 +148,31 @@ final class PackageManagerHook implements InvocationHandler {
     private boolean hostPermissionGranted(String permission) {
         for (Method candidate : real.getClass().getMethods()) {
             Class<?>[] types = candidate.getParameterTypes();
-            if (!"checkUidPermission".equals(candidate.getName()) || types.length != 2
-                    || types[0] != String.class || types[1] != int.class) continue;
+            if (!"checkUidPermission".equals(candidate.getName()) || types.length < 2) continue;
             try {
-                Object result = candidate.invoke(real, permission, Process.myUid());
-                return result instanceof Integer && ((Integer) result) == PackageManager.PERMISSION_GRANTED;
+                Object result;
+                if (types[0] == String.class && types[1] == int.class) {
+                    result = candidate.invoke(real, permission, Process.myUid());
+                } else if (types[0] == int.class && types[1] == String.class) {
+                    result = types.length == 2
+                            ? candidate.invoke(real, Process.myUid(), permission)
+                            : candidate.invoke(real, Process.myUid(), permission, 0);
+                } else {
+                    continue;
+                }
+                if (result instanceof Integer) {
+                    return ((Integer) result) == PackageManager.PERMISSION_GRANTED;
+                }
             } catch (ReflectiveOperationException | RuntimeException e) {
                 Log.w(TAG, "cannot query host permission " + permission + ": " + e);
-                return false;
             }
         }
-        return false;
+        try {
+            return hostContext.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED;
+        } catch (RuntimeException e) {
+            Log.w(TAG, "context permission check failed for " + permission + ": " + e);
+            return false;
+        }
     }
 
     private Object rewrite(String name, Object[] args, Object result) {
