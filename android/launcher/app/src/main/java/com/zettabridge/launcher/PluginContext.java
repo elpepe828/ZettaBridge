@@ -35,12 +35,12 @@ import java.io.FileOutputStream;
 final class PluginContext extends ContextWrapper {
     private final LoadedPlugin plugin;
     private final Resources resources;
+    private Resources.Theme theme;
+    private LayoutInflater inflater;
 
     LoadedPlugin plugin() {
         return plugin;
     }
-    private Resources.Theme theme;
-    private LayoutInflater inflater;
 
     PluginContext(Context base, LoadedPlugin plugin) {
         this(base, plugin, plugin.resources);
