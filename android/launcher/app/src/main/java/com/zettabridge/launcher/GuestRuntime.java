@@ -204,7 +204,7 @@ final class GuestRuntime {
         }
     }
 
-    private synchronized LoadedPlugin pluginOf(Activity activity) {
+    synchronized LoadedPlugin pluginOf(Activity activity) {
         ClassLoader cl = activity.getClass().getClassLoader();
         for (LoadedPlugin p : plugins.values()) {
             if (p.classLoader == cl) return p;
