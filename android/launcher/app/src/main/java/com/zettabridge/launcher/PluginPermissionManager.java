@@ -4,8 +4,11 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.PermissionInfo;
+import android.os.Build;
 import android.widget.Toast;
 
 import java.util.Arrays;
@@ -16,6 +19,8 @@ import java.util.Set;
 final class PluginPermissionManager {
     static final String ACTION_REQUEST_PERMISSIONS =
             "android.content.pm.action.REQUEST_PERMISSIONS";
+    private static final String ACTION_APPLICATION_DETAILS_SETTINGS =
+            "android.settings.APPLICATION_DETAILS_SETTINGS";
     static final String EXTRA_REQUEST_PERMISSIONS_NAMES =
             "android.content.pm.extra.REQUEST_PERMISSIONS_NAMES";
     static final String EXTRA_REQUEST_PERMISSIONS_RESULTS =
@@ -48,8 +53,37 @@ final class PluginPermissionManager {
 
     private PluginPermissionManager() {}
 
-    static boolean isSupportedRuntimePermission(String permission) {
-        return permission != null && SUPPORTED_RUNTIME_PERMISSIONS.contains(permission);
+    static boolean isSupportedRuntimePermission(Context context, String permission) {
+        if (context == null || permission == null || !SUPPORTED_RUNTIME_PERMISSIONS.contains(permission)) {
+            return false;
+        }
+
+        int sdk = Build.VERSION.SDK_INT;
+        if ("android.permission.READ_EXTERNAL_STORAGE".equals(permission) && sdk > 32) return false;
+        if ("android.permission.WRITE_EXTERNAL_STORAGE".equals(permission) && sdk > 28) return false;
+        if (("android.permission.READ_MEDIA_IMAGES".equals(permission)
+                || "android.permission.READ_MEDIA_VIDEO".equals(permission)
+                || "android.permission.READ_MEDIA_AUDIO".equals(permission)) && sdk < 33) return false;
+        if ("android.permission.READ_MEDIA_VISUAL_USER_SELECTED".equals(permission) && sdk < 34) return false;
+        if (("android.permission.BLUETOOTH_SCAN".equals(permission)
+                || "android.permission.BLUETOOTH_CONNECT".equals(permission)
+                || "android.permission.BLUETOOTH_ADVERTISE".equals(permission)) && sdk < 31) return false;
+        if ("android.permission.NEARBY_WIFI_DEVICES".equals(permission) && sdk < 33) return false;
+        if ("android.permission.ACTIVITY_RECOGNITION".equals(permission) && sdk < 29) return false;
+        if ("android.permission.POST_NOTIFICATIONS".equals(permission) && sdk < 33) return false;
+
+        // Never ask Android to grant a permission that this launcher APK did not actually declare.
+        try {
+            PackageInfo info = context.getPackageManager().getPackageInfo(
+                    context.getPackageName(), PackageManager.GET_PERMISSIONS);
+            if (info.requestedPermissions == null) return false;
+            for (String declared : info.requestedPermissions) {
+                if (permission.equals(declared)) return true;
+            }
+        } catch (PackageManager.NameNotFoundException | RuntimeException e) {
+            return false;
+        }
+        return false;
     }
 
     static boolean isDangerousPermission(Context context, String permission) {
@@ -71,7 +105,7 @@ final class PluginPermissionManager {
 
         Context hostContext = context.getBaseContext();
         if (isDangerousPermission(hostContext, permission)) {
-            if (!isSupportedRuntimePermission(permission)
+            if (!isSupportedRuntimePermission(hostContext, permission)
                     || !plugin.record.hasGrantedPermission(permission)) {
                 return PackageManager.PERMISSION_DENIED;
             }
@@ -87,6 +121,28 @@ final class PluginPermissionManager {
             return checkSelfPermission(context, plugin, permission);
         }
         return context.getBaseContext().checkPermission(permission, pid, uid);
+    }
+
+    /**
+     * Android Settings cannot show an imported APK as an installed package. Map its app-details
+     * deep link to ZettaBridge's per-plugin permission screen instead.
+     */
+    static Intent redirectApplicationDetails(GuestRuntime runtime, Intent intent) {
+        if (intent == null || !ACTION_APPLICATION_DETAILS_SETTINGS.equals(intent.getAction())) return null;
+        Uri data = intent.getData();
+        if (data == null || !"package".equals(data.getScheme())) return null;
+
+        LoadedPlugin plugin = runtime.current();
+        if (plugin == null || plugin.application == null
+                || !plugin.packageName.equals(data.getSchemeSpecificPart())) return null;
+
+        Context context = plugin.application.getBaseContext();
+        if (context instanceof PluginContext) {
+            context = ((PluginContext) context).getBaseContext();
+        }
+        Intent permissions = PluginPermissionsActivity.intent(context, plugin.packageName);
+        permissions.setFlags(intent.getFlags());
+        return permissions;
     }
 
     /**
