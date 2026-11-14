@@ -179,7 +179,16 @@ public final class PluginPermissionsActivity extends Activity {
             return;
         }
         pendingPermission = permission;
-        requestPermissions(new String[] {permission}, REQUEST_HOST_PERMISSION);
+        if ("android.permission.ACCESS_FINE_LOCATION".equals(permission)
+                || "android.permission.ACCESS_COARSE_LOCATION".equals(permission)) {
+            // Android 12+ requires coarse and fine to be requested together.
+            requestPermissions(new String[] {
+                    "android.permission.ACCESS_COARSE_LOCATION",
+                    "android.permission.ACCESS_FINE_LOCATION"
+            }, REQUEST_HOST_PERMISSION);
+        } else {
+            requestPermissions(new String[] {permission}, REQUEST_HOST_PERMISSION);
+        }
     }
 
     @Override
@@ -194,13 +203,16 @@ public final class PluginPermissionsActivity extends Activity {
             refresh();
             return;
         }
-        boolean granted = permissions != null && grantResults != null
-                && permissions.length > 0 && grantResults.length > 0
-                && permission.equals(permissions[0])
-                && grantResults[0] == PackageManager.PERMISSION_GRANTED;
-        record.setPermissionGranted(permission, granted);
-        saveRecord(granted ? "Android and this app now have permission."
-                : "Android did not grant the permission.");
+        boolean grantedTarget = false;
+        if (permissions != null && grantResults != null) {
+            for (int i = 0; i < Math.min(permissions.length, grantResults.length); i++) {
+                boolean granted = grantResults[i] == PackageManager.PERMISSION_GRANTED;
+                record.setPermissionGranted(permissions[i], granted);
+                if (permission.equals(permissions[i])) grantedTarget = granted;
+            }
+        }
+        saveRecord(grantedTarget ? "Android and this app now have permission."
+                : "Android did not grant the requested permission.");
     }
 
     private void saveRecord(String message) {
