@@ -8,8 +8,10 @@ import android.net.Uri;
 import android.content.pm.PackageManager;
 import android.content.pm.PermissionInfo;
 import android.os.Build;
+import android.util.Log;
 import android.widget.Toast;
 
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -151,9 +153,23 @@ final class PluginPermissionManager {
 
         int[] results = new int[requested.length];
         boolean deniedAny = false;
+        boolean historyChanged = false;
         for (int i = 0; i < requested.length; i++) {
             results[i] = plugin.application.checkSelfPermission(requested[i]);
             deniedAny |= results[i] != PackageManager.PERMISSION_GRANTED;
+            if (results[i] != PackageManager.PERMISSION_GRANTED
+                    && plugin.record.hasRequestedPermission(requested[i])
+                    && !plugin.record.hasAttemptedPermission(requested[i])) {
+                plugin.record.markPermissionAttempted(requested[i]);
+                historyChanged = true;
+            }
+        }
+        if (historyChanged) {
+            try {
+                plugin.record.save();
+            } catch (IOException e) {
+                Log.w("zb-launcher", "cannot save guest permission request history", e);
+            }
         }
 
         Intent data = new Intent()
