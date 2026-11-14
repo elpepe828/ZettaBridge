@@ -18,4 +18,13 @@ final class PluginPermissionPolicy {
         return false;
     }
 
+    /** Returns the first permission the plugin did not declare, or null when all are declared. */
+    static String firstUndeclared(String[] declared, String[] requested) {
+        if (requested == null || requested.length == 0) return null;
+        for (String permission : requested) {
+            if (!requests(declared, permission)) return permission != null ? permission : "<null>";
+        }
+        return null;
+    }
+
 }
