@@ -121,7 +121,8 @@ final class PackageManagerHook implements InvocationHandler {
         if (plugin == null || !(args[0] instanceof String)) return invokeReal(method, args);
         String permission = (String) args[0];
         if (!plugin.requestsPermission(permission)) {
-            return "shouldShowRequestPermissionRationale".equals(method.getName()) ? false : 0;
+            if ("shouldShowRequestPermissionRationale".equals(method.getName())) return false;
+            return 0;
         }
 
         Object[] mapped = args.clone();
