@@ -74,6 +74,8 @@ final class GuestInstrumentation extends Instrumentation {
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("Instrumentation.execStartActivity not found", e);
         }
+        ActivityResult permissionResult = PluginPermissionManager.interceptRequest(runtime, intent);
+        if (permissionResult != null) return permissionResult;
         Intent routed = runtime.route(intent);
         return (ActivityResult) Reflect.invoke(execStartActivity, base, who, contextThread, token, target, routed,
                 requestCode, options);
@@ -89,6 +91,8 @@ final class GuestInstrumentation extends Instrumentation {
         } catch (NoSuchMethodException e) {
             throw new IllegalStateException("Instrumentation.execStartActivity(String) not found", e);
         }
+        ActivityResult permissionResult = PluginPermissionManager.interceptRequest(runtime, intent);
+        if (permissionResult != null) return permissionResult;
         Intent routed = runtime.route(intent);
         return (ActivityResult) Reflect.invoke(execStartActivityFromString, base, who, contextThread, token, target,
                 routed, requestCode, options);
