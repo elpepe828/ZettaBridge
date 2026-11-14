@@ -76,9 +76,14 @@ final class PackageManagerHook implements InvocationHandler {
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
-        if (args != null && args.length > 0
-                && ("checkPermission".equals(method.getName()) || "checkUidPermission".equals(method.getName()))) {
-            return permissionCheck(method, args);
+        if (args != null && args.length > 0) {
+            String name = method.getName();
+            if ("checkPermission".equals(name) || "checkUidPermission".equals(name)) {
+                return permissionCheck(method, args);
+            }
+            if ("getPermissionFlags".equals(name) || "shouldShowRequestPermissionRationale".equals(name)) {
+                return permissionMetadata(method, args);
+            }
         }
         try {
             Object result = method.invoke(real, args);
@@ -109,6 +114,24 @@ final class PackageManagerHook implements InvocationHandler {
             return PackageManager.PERMISSION_DENIED;
         }
         return invokeReal(method, args);
+    }
+
+    private Object permissionMetadata(Method method, Object[] args) throws Throwable {
+        LoadedPlugin plugin = runtime.current();
+        if (plugin == null || !(args[0] instanceof String)) return invokeReal(method, args);
+        String permission = (String) args[0];
+        if (!plugin.requestsPermission(permission)) {
+            return "shouldShowRequestPermissionRationale".equals(method.getName()) ? false : 0;
+        }
+
+        Object[] mapped = args.clone();
+        if (mapped.length > 1 && mapped[1] instanceof String) {
+            String packageName = (String) mapped[1];
+            if (hostPackage.equals(packageName) || plugin.packageName.equals(packageName)) {
+                mapped[1] = hostPackage;
+            }
+        }
+        return invokeReal(method, mapped);
     }
 
     private Object invokeReal(Method method, Object[] args) throws Throwable {
