@@ -112,6 +112,7 @@ public final class LauncherContractsTest {
         record.requestedPermissions.add("android.permission.RECORD_AUDIO");
         record.grantedPermissions.add("android.permission.CAMERA");
         record.grantedPermissions.add("android.permission.READ_CONTACTS");
+        record.markPermissionAttempted("android.permission.CAMERA");
         record.save();
         PluginRecord loaded = PluginRecord.load(record.dir);
         check(loaded != null && "armeabi-v7a".equals(loaded.selectedAbi), "selected ABI metadata");
@@ -119,6 +120,7 @@ public final class LauncherContractsTest {
         check("32-bit armeabi-v7a: ready".equals(loaded.status()), "arm32 status");
         check(loaded.hasRequestedPermission("android.permission.CAMERA"), "requested permission persisted");
         check(loaded.hasGrantedPermission("android.permission.CAMERA"), "per-plugin grant persisted");
+        check(loaded.hasAttemptedPermission("android.permission.CAMERA"), "permission request history persisted");
         check(!loaded.hasGrantedPermission("android.permission.READ_CONTACTS"),
                 "grants for undeclared permissions are discarded");
     }
