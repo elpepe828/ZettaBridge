@@ -180,12 +180,14 @@ final class PackageManagerHook implements InvocationHandler {
                 return pluginActivityResolve(args[0]);
             }
             case "getApplicationInfo":
-                if (hostPackage.equals(args[0]) && result instanceof ApplicationInfo) {
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])
+                        && result instanceof ApplicationInfo) {
                     return withPluginMetaData((ApplicationInfo) result);
                 }
                 return result;
             case "getPackageInfo":
-                if (args[0] instanceof String && hostPackage.equals(args[0]) && result instanceof PackageInfo) {
+                if (args[0] instanceof String && isCurrentPluginPackage((String) args[0])
+                        && result instanceof PackageInfo) {
                     return withPluginVersion((PackageInfo) result);
                 }
                 return result;
@@ -261,15 +263,16 @@ final class PackageManagerHook implements InvocationHandler {
     private ApplicationInfo withPluginMetaData(ApplicationInfo hostInfo) {
         LoadedPlugin p = runtime.current();
         if (p == null) return hostInfo;
-        ApplicationInfo copy = new ApplicationInfo(hostInfo);
-        copy.metaData = p.appInfo.metaData;
+        ApplicationInfo copy = new ApplicationInfo(p.appInfo);
+        copy.uid = Process.myUid();
         return copy;
     }
 
     private PackageInfo withPluginVersion(PackageInfo hostInfo) {
         LoadedPlugin p = runtime.current();
         if (p == null) return hostInfo;
-        PackageInfo copy = new PackageInfo(hostInfo);
+        PackageInfo copy = new PackageInfo(p.info);
+        copy.applicationInfo = new ApplicationInfo(p.appInfo);
         copy.versionName = p.info.versionName;
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             copy.setLongVersionCode(p.info.getLongVersionCode());
