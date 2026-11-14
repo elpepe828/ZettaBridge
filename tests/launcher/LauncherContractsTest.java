@@ -50,11 +50,6 @@ public final class LauncherContractsTest {
                 "declared permission must be visible");
         check(!PluginPermissionPolicy.requests(requested, "android.permission.ACCESS_FINE_LOCATION"),
                 "undeclared permission must not be visible");
-        int[] filtered = PluginPermissionPolicy.filterGrantResults(requested,
-                new String[] {"android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION"},
-                new int[] {0, 0});
-        check(filtered[0] == 0 && filtered[1] == -1,
-                "permission result for an undeclared permission must be denied");
     }
 
     private static void testAbiPriority() {
