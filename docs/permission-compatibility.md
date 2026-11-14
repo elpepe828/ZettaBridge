@@ -14,12 +14,19 @@ In the `:guest` process:
   `checkCallingOrSelfPermission()` deny permissions that the current APK did not declare.
 - `PackageManager.checkPermission()` and `checkUidPermission()` expose the same
   manifest-scoped result for the active plugin.
+- Permission rationale and permission-flag queries are mapped to the launcher package,
+  but hidden for permissions absent from the plugin manifest.
+- Instrumentation start-activity hooks reject runtime permission requests when any
+  requested permission is absent from the plugin APK manifest.
 - `PackageInfo.requestedPermissions` and `requestedPermissionsFlags` are populated
   from the APK manifest and the launcher's actual grant state.
+
 This covers the usual camera, microphone, foreground location, media, contacts,
 calendar, phone, SMS, notification, sensor and nearby-device permission checks.
 The standard Android permission dialog is still the platform dialog for **ZettaBridge**.
-The user must approve the permission when Android requests it.
+The user must approve the permission when Android requests it. Android requires the
+runtime permission to be declared by the requesting app and delivers its result through
+the Activity permission callback; ZettaBridge gates that request before platform dispatch.
 
 ## Important platform boundary
 
@@ -57,8 +64,8 @@ automatically granted. Most dangerous permissions still require a platform promp
 ## Next compatibility priorities
 
 1. Add explicit Settings flows for special app access and validate return state.
-2. Virtualize permission rationale and permission flags consistently for all package-info
-   query overloads and Android releases.
+2. Verify rationale and permission-flag mediation across Android releases and
+   PackageManager overloads, including vendor framework variations.
 3. Add app-op attribution and tests on physical devices for camera, microphone and location.
 4. Improve the package/component surface (services, broadcast receivers, providers and
    content resolver authorities), then storage/URI grants and notifications.
