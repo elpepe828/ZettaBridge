@@ -18,6 +18,15 @@ final class PluginPermissionPolicy {
         return false;
     }
 
+    /** Maps a virtual plugin package to the installed host package for Android binder calls. */
+    static String mapPackageToHost(String requestedPackage, String hostPackage, String pluginPackage) {
+        if (requestedPackage == null || hostPackage == null || pluginPackage == null) return null;
+        if (hostPackage.equals(requestedPackage) || pluginPackage.equals(requestedPackage)) {
+            return hostPackage;
+        }
+        return null;
+    }
+
     /** Returns the first permission the plugin did not declare, or null when all are declared. */
     static String firstUndeclared(String[] declared, String[] requested) {
         if (requested == null || requested.length == 0) return null;
