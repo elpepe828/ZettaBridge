@@ -211,6 +211,54 @@ final class PluginStore {
         }
     }
 
+    /**
+     * Rebuilds the native-library directory for another supported ABI from the stored base.apk.
+     * Extraction and ARM32 fixups happen in a sibling staging directory; the live library
+     * directory is replaced only after every selected-ABI library has been prepared.
+     */
+    static PluginRecord selectAbi(Context context, PluginRecord record, String abi) throws IOException {
+        if (abi == null || !PluginFiles.supportedAbis(record.abis).contains(abi)) {
+            throw new IOException("APK does not contain a supported library set for " + abi
+                    + "; available ABIs: " + record.abis);
+        }
+        if (abi.equals(record.selectedAbi)) return record;
+
+        final boolean translated = PluginRecord.ABI_ARM32.equals(abi)
+                || PluginRecord.ABI_ARM32_V7A.equals(abi);
+        if (translated) RuntimeBundle.install(context);
+
+        File staging = new File(record.dir, ".lib-" + abi + ".staging");
+        PluginFiles.deleteRecursive(staging);
+        try {
+            PluginFiles.extractLibraries(record.apk(), staging, abi, library -> {
+                if (!translated) return;
+                String result = ZBridge.fixGuestLibrary(library.getPath());
+                if (result == null || result.startsWith("skipped:")) {
+                    throw new IOException("cannot prepare " + library.getName() + ": " + result);
+                }
+            });
+
+            // Keep user data and the APK untouched; only the selected ABI's libraries change.
+            PluginFiles.replaceDirectory(staging, record.libDir());
+            String previousAbi = record.selectedAbi;
+            record.selectedAbi = abi;
+            try {
+                record.save();
+            } catch (IOException saveFailure) {
+                record.selectedAbi = previousAbi;
+                throw saveFailure;
+            }
+
+            // Proxy files correspond to the previous library set. Regenerate lazily after switching.
+            PluginFiles.deleteRecursive(record.proxyDir());
+            PluginRecord updated = PluginRecord.load(record.dir);
+            if (updated == null) throw new IOException("cannot reload plugin metadata after ABI switch");
+            return updated;
+        } finally {
+            PluginFiles.deleteRecursive(staging);
+        }
+    }
+
     static void delete(PluginRecord r) {
         PluginFiles.deleteRecursive(r.dir);
     }
