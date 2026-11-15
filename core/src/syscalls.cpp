@@ -45,6 +45,7 @@
 #include "zb/guest_thread.h"
 #include "zb/hang_watchdog.h"
 #include "zb/log.h"
+#include "zb/open_flags.h"
 #include "zb/process.h"
 #include "zb/runtime_report.h"
 
@@ -1238,12 +1239,18 @@ bool handle_syscall(Process& proc, GuestThread& thread) {
     case NR_openat: {
         const char* guest_path = guest_cstr(c.mem, c.a[1]);
         const bool watched = open_worth_watching(guest_path);
-        if (guest_path != nullptr && proc.open_synthetic_file(guest_path, static_cast<int>(c.a[2]), res)) {
+        int host_flags = 0;
+        if (!translate_arm_open_flags(c.a[2], host_flags)) {
+            res = -EINVAL;
+            break;
+        }
+        if (guest_path != nullptr && proc.open_synthetic_file(guest_path, host_flags, res)) {
             if (watched) note_watched_open(guest_path, res);
             break;
         }
-        res = sys_path_call(c, 1, [](Ctx& x, const char* p) -> long {
-            return ::syscall(SYS_openat, static_cast<int>(x.a[0]), p, static_cast<int>(x.a[2]), static_cast<mode_t>(x.a[3]));
+        res = sys_path_call(c, 1, [host_flags](Ctx& x, const char* p) -> long {
+            return ::syscall(SYS_openat, static_cast<int>(x.a[0]), p, host_flags,
+                             static_cast<mode_t>(x.a[3]));
         });
         if (watched) note_watched_open(guest_path, res);
         break;
