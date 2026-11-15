@@ -81,6 +81,15 @@ final class PackageManagerHook implements InvocationHandler {
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
         if (args != null && args.length > 0) {
             String name = method.getName();
+            if ("getInstallerPackageName".equals(name)
+                    && args[0] instanceof String
+                    && isCurrentPluginPackage((String) args[0])) {
+                // Imported plugins are virtual packages: Android's PackageManager has no install
+                // record for them and throws IllegalArgumentException for this query. A null
+                // installer is the correct result for an APK imported outside a package installer.
+                Log.d(TAG, "plugin has no platform installer record: " + args[0]);
+                return null;
+            }
             if ("checkPermission".equals(name) || "checkUidPermission".equals(name)) {
                 return permissionCheck(method, args);
             }
