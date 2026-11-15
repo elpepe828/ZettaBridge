@@ -63,8 +63,11 @@ ZettaBridge launcher (arm64 app)
   inside an app process next to ART:
   - static and dynamic arm32 Android executables through the real arm32 linker;
   - threads, signals, C++ exceptions, `dlopen`, kernel user helpers.
-- **Launcher.** Imports APKs as plugins with home-screen shortcuts. 64-bit apps already run
-  as plugins, including apps with Firebase/AdMob, Jetpack Compose and Flutter.
+- **Launcher.** Imports APKs as plugins with home-screen shortcuts. Compatibility is
+  package-agnostic: Java/Kotlin runs on the device's real 64-bit ART, ARM64 libraries run
+  natively by default, and APKs that only contain ARM32 libraries use the translator.
+  Dual-ABI APKs can also be switched to the ARM32 translator from the app's long-press menu.
+  64-bit plugins include apps with Firebase/AdMob, Jetpack Compose and Flutter.
 - **JNI bridge.** Implemented and tested against a mock JVM on the host:
   - guest `JNIEnv`/`JavaVM`;
   - Java -> guest native calls from multiple Java threads;
@@ -82,8 +85,8 @@ ZettaBridge launcher (arm64 app)
   - A modern Flutter app starts, runs its Dart code, presents frames and takes touch input,
     though rendering is not yet complete.
 
-Not supported yet: Vulkan and
-anything that needs a real package installation.
+Not supported yet: Vulkan, split APK/App Bundle imports, and anything that needs a real
+package installation. A single APK that can run inside a host process is required.
 
 ## Roadmap
 
