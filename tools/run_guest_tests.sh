@@ -17,7 +17,12 @@ run_case() {
     name=$1
     expected_exit=$2
     shift 2
-    out=$("$ZBRUN" --sysroot "$SYSROOT" $CASE_ARGS "$GUEST/$name" "$@" 2>"$GUEST/$name.stderr")
+    if [ "$name" = "syscalls_dynamic" ]; then
+        # Keep the failing directory/epoll checks diagnosable in CI without tracing every test.
+        out=$(ZB_STRACE=1 "$ZBRUN" --sysroot "$SYSROOT" $CASE_ARGS "$GUEST/$name" "$@" 2>"$GUEST/$name.stderr")
+    else
+        out=$("$ZBRUN" --sysroot "$SYSROOT" $CASE_ARGS "$GUEST/$name" "$@" 2>"$GUEST/$name.stderr")
+    fi
     code=$?
     if [ "$code" != "$expected_exit" ]; then
         echo "FAIL $name: exit $code, expected $expected_exit"
