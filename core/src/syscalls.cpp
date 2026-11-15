@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <cstddef>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -80,6 +81,16 @@ struct Ctx {
     // Set by rt_sigreturn: r0 was restored from the signal frame and must not be overwritten.
     bool no_result = false;
 };
+
+// Android's AArch32 sys/epoll.h keeps the 64-bit data union naturally aligned
+// (data starts at byte 8, total size 16). The x86_64 host epoll_event is packed
+// to 12 bytes, so guest memory must never be passed to the host epoll syscalls directly.
+struct GuestEpollEvent {
+    std::uint32_t events;
+    alignas(8) std::uint64_t data;
+};
+static_assert(offsetof(GuestEpollEvent, data) == 8);
+static_assert(sizeof(GuestEpollEvent) == 16);
 
 // Marks the thread as asleep in a host syscall for as long as it lives, so a guest signal posted
 // to this thread breaks that syscall instead of waiting for it to end on its own.
@@ -1041,11 +1052,26 @@ std::int32_t sys_recvmsg(Ctx& c) {
 std::int32_t sys_epoll_wait(Ctx& c) {
     const int max_events = static_cast<int>(c.a[2]);
     if (max_events <= 0 || max_events > 65536) return -EINVAL;
-    std::uint8_t* events = c.mem.host_ptr(c.a[1], static_cast<std::uint64_t>(max_events) * sizeof(epoll_event), kPageWrite);
-    if (events == nullptr) return -EFAULT;
+    const std::uint64_t guest_size = static_cast<std::uint64_t>(max_events) * sizeof(GuestEpollEvent);
+    std::uint8_t* guest_events = c.mem.host_ptr(c.a[1], guest_size, kPageWrite);
+    if (guest_events == nullptr) return -EFAULT;
+
+    // Host and AArch32 epoll_event layouts differ on x86_64 (12 vs. 16 bytes).
+    // Use host-native events for the syscall, then marshal them into the guest ABI.
+    std::vector<epoll_event> host_events(static_cast<std::size_t>(max_events));
     // epoll_pwait's guest signal mask is ignored: guest masks are emulated.
-    return result_of(::epoll_pwait(static_cast<int>(c.a[0]), reinterpret_cast<epoll_event*>(events), max_events,
-                                   static_cast<int>(c.a[3]), nullptr));
+    const int count = ::epoll_pwait(static_cast<int>(c.a[0]), host_events.data(), max_events,
+                                    static_cast<int>(c.a[3]), nullptr);
+    if (count <= 0) return result_of(count);
+
+    for (int i = 0; i < count; ++i) {
+        const GuestEpollEvent event{
+                host_events[static_cast<std::size_t>(i)].events,
+                host_events[static_cast<std::size_t>(i)].data.u64};
+        std::memcpy(guest_events + static_cast<std::size_t>(i) * sizeof(GuestEpollEvent),
+                    &event, sizeof(event));
+    }
+    return count;
 }
 
 bool read_itimerval(GuestMemory& m, std::uint32_t addr, itimerval& out) {
@@ -1574,13 +1600,22 @@ bool handle_syscall(Process& proc, GuestThread& thread) {
     case NR_eventfd2: res = result_of(::syscall(SYS_eventfd2, c.a[0], static_cast<int>(c.a[1]))); break;
     case NR_epoll_create1: res = result_of(::epoll_create1(static_cast<int>(c.a[0]))); break;
     case NR_epoll_ctl: {
-        std::uint8_t* event = c.a[3] != 0 ? c.mem.host_ptr(c.a[3], sizeof(epoll_event), kPageRead) : nullptr;
-        if (c.a[3] != 0 && !event) {
-            res = -EFAULT;
-        } else {
-            res = result_of(::epoll_ctl(static_cast<int>(c.a[0]), static_cast<int>(c.a[1]), static_cast<int>(c.a[2]),
-                                        reinterpret_cast<epoll_event*>(event)));
+        epoll_event host_event{};
+        epoll_event* host_event_ptr = nullptr;
+        if (c.a[3] != 0) {
+            std::uint8_t* guest_bytes = c.mem.host_ptr(c.a[3], sizeof(GuestEpollEvent), kPageRead);
+            if (!guest_bytes) {
+                res = -EFAULT;
+                break;
+            }
+            GuestEpollEvent guest_event{};
+            std::memcpy(&guest_event, guest_bytes, sizeof(guest_event));
+            host_event.events = guest_event.events;
+            host_event.data.u64 = guest_event.data;
+            host_event_ptr = &host_event;
         }
+        res = result_of(::epoll_ctl(static_cast<int>(c.a[0]), static_cast<int>(c.a[1]),
+                                    static_cast<int>(c.a[2]), host_event_ptr));
         break;
     }
     case NR_epoll_wait:
