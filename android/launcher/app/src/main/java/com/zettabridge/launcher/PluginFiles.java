@@ -25,9 +25,12 @@ final class PluginFiles {
     private PluginFiles() {}
 
     static String selectAbi(Set<String> abis) {
-        if (abis.contains(PluginRecord.ABI_ARM64)) return PluginRecord.ABI_ARM64;
+        // ZettaBridge's compatibility runtime exists specifically for 32-bit APKs on
+        // arm64-only Android. Prefer ARM32 when an APK ships both ABIs so the translated
+        // path is actually exercised; use ARM64 only when no ARM32 library set exists.
         if (abis.contains(PluginRecord.ABI_ARM32_V7A)) return PluginRecord.ABI_ARM32_V7A;
         if (abis.contains(PluginRecord.ABI_ARM32)) return PluginRecord.ABI_ARM32;
+        if (abis.contains(PluginRecord.ABI_ARM64)) return PluginRecord.ABI_ARM64;
         return null;
     }
 
