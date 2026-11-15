@@ -90,6 +90,21 @@ jobs:
       - name: Extract the ARM32 Android system libraries
         run: tools/extract_sysroot.sh
 
+      - name: Configure the host regression test build
+        run: |
+          cmake -S . -B build/host -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DZB_BUILD_TESTS=ON
+
+      - name: Build host emulator and regression tests
+        run: ninja -C build/host
+
+      - name: Run translated ARM32 guest test suite
+        run: tools/run_guest_tests.sh
+
+      - name: Run host and end-to-end integration tests
+        run: ctest --test-dir build/host --output-on-failure
+
       - name: Configure the Android ARM64 native build
         run: |
           mkdir -p build/boost-headers
