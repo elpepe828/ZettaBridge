@@ -26,6 +26,11 @@ final class PluginFiles {
 
     private PluginFiles() {}
 
+    // A proxy may be replaced between app launches when the bundled proxy changes, but
+    // never while the current guest process may have it loaded. File timestamps alone cannot
+    // distinguish a new launcher build from a template updated moments after first use.
+    private static final Set<String> PROCESS_PROXY_PATHS = new HashSet<>();
+
     /** Supported ABIs, ordered with native ARM64 first for the chooser's presentation. */
     static List<String> supportedAbis(Set<String> abis) {
         List<String> supported = new ArrayList<>();
@@ -128,30 +133,37 @@ final class PluginFiles {
         if (!proxyTemplate.isFile()) throw new IOException("missing proxy template " + proxyTemplate);
         if (!proxyDir.isDirectory() && !proxyDir.mkdirs()) throw new IOException("cannot create " + proxyDir);
         File proxy = new File(proxyDir, fileName);
-        // A copy older than the template is from a previous version of the launcher, and it is
-        // missing whatever that version's proxy could not do: an app updated after the proxy grew
-        // ANativeActivity_onCreate would keep failing with "undefined symbol" forever.
-        if (proxy.isFile() && proxy.lastModified() >= proxyTemplate.lastModified()) return proxy;
-        if (proxy.isFile() && !proxy.delete()) throw new IOException("cannot replace the stale proxy " + proxy);
-        if (proxy.exists()) throw new IOException("proxy path is not a file: " + proxy);
+        synchronized (PROCESS_PROXY_PATHS) {
+            String key = proxy.getAbsolutePath();
+            if (proxy.isFile() && PROCESS_PROXY_PATHS.contains(key)) return proxy;
+            // Reuse a proxy already at least as new as the template from a previous process.
+            if (proxy.isFile() && proxy.lastModified() >= proxyTemplate.lastModified()) {
+                PROCESS_PROXY_PATHS.add(key);
+                return proxy;
+            }
+            if (proxy.isFile() && !proxy.delete()) throw new IOException("cannot replace the stale proxy " + proxy);
+            if (proxy.exists()) throw new IOException("proxy path is not a file: " + proxy);
 
-        File temporary = Files.createTempFile(proxyDir.toPath(), "." + fileName + ".", ".tmp").toFile();
-        try {
-            try (InputStream in = new FileInputStream(proxyTemplate)) {
-                copy(in, temporary);
-            }
-            if (!temporary.setReadOnly() || !temporary.setExecutable(true, true)) {
-                throw new IOException("cannot set proxy permissions: " + temporary);
-            }
+            File temporary = Files.createTempFile(proxyDir.toPath(), "." + fileName + ".", ".tmp").toFile();
             try {
-                move(temporary, proxy, false);
-            } catch (FileAlreadyExistsException ignored) {
-                // Another Java thread published the same immutable proxy first.
+                try (InputStream in = new FileInputStream(proxyTemplate)) {
+                    copy(in, temporary);
+                }
+                if (!temporary.setReadOnly() || !temporary.setExecutable(true, true)) {
+                    throw new IOException("cannot set proxy permissions: " + temporary);
+                }
+                try {
+                    move(temporary, proxy, false);
+                } catch (FileAlreadyExistsException ignored) {
+                    // Another process/thread published the same immutable proxy first.
+                }
+            } finally {
+                temporary.delete();
             }
-        } finally {
-            temporary.delete();
+            if (!proxy.isFile()) return null;
+            PROCESS_PROXY_PATHS.add(key);
+            return proxy;
         }
-        return proxy.isFile() ? proxy : null;
     }
 
     static void copyAtomic(InputStream in, File out) throws IOException {
