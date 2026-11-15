@@ -10,8 +10,10 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -25,6 +27,15 @@ final class PluginFiles {
     private PluginFiles() {}
 
     /** Prefer native ARM64 when present; translate ARM32 only when it is the available ABI. */
+    /** Supported ABIs, ordered with native ARM64 first for the chooser's presentation. */
+    static List<String> supportedAbis(Set<String> abis) {
+        List<String> supported = new ArrayList<>();
+        if (abis.contains(PluginRecord.ABI_ARM64)) supported.add(PluginRecord.ABI_ARM64);
+        if (abis.contains(PluginRecord.ABI_ARM32_V7A)) supported.add(PluginRecord.ABI_ARM32_V7A);
+        if (abis.contains(PluginRecord.ABI_ARM32)) supported.add(PluginRecord.ABI_ARM32);
+        return supported;
+    }
+
     static String selectAbi(Set<String> abis) {
         if (abis.contains(PluginRecord.ABI_ARM64)) return PluginRecord.ABI_ARM64;
         return select32BitAbi(abis);
