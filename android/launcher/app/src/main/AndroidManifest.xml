@@ -86,7 +86,8 @@
         android:name=".ZbApplication"
         android:allowBackup="false"
         android:label="ZettaBridge"
-        android:icon="@android:drawable/sym_def_app_icon"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.DarkActionBar">
 
         <activity
