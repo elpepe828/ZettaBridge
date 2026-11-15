@@ -52,16 +52,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y e2fsprogs libboost-dev ninja-build unzip
 
-      - name: Set up Android SDK, NDK and CMake
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platform-tools
-            platforms;android-35
-            platforms;android-36
-            build-tools;35.0.0
-            ndk;29.0.14206865
-            cmake;3.22.1
+          packages: 'platform-tools'
+
+      - name: Install Android API, build tools, NDK and CMake
+        run: |
+          sdkmanager "platforms;android-35" "platforms;android-36" \
+            "build-tools;35.0.0" "ndk;29.0.14206865" "cmake;3.22.1"
 
       - name: Configure NDK environment
         run: |
