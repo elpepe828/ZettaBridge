@@ -213,8 +213,8 @@ public class LibraryActivity extends Activity {
     private void showActions(PluginRecord r) {
         new AlertDialog.Builder(this)
                 .setTitle(r.label)
-                .setItems(new String[] {"Launch", "Manage permissions", "Last run report", "Pin shortcut",
-                                        r.hideAds ? "Show ads" : "Hide ads",
+                .setItems(new String[] {"Launch", "Manage permissions", "Last run report", "Last launch error",
+                                        "Pin shortcut", r.hideAds ? "Show ads" : "Hide ads",
                                         r.preciseFaults ? "Precise faults: on" : "Precise faults (slow)",
                                         r.diagnostics ? "GL diagnostics: on" : "GL diagnostics (slow)",
                                         "Delete"},
@@ -222,11 +222,12 @@ public class LibraryActivity extends Activity {
                             if (which == 0) launch(r);
                             if (which == 1) startActivity(PluginPermissionsActivity.intent(this, r.packageName));
                             if (which == 2) showRuntimeReport(r);
-                            if (which == 3) pinShortcut(r);
-                            if (which == 4) toggleAds(r);
-                            if (which == 5) togglePreciseFaults(r);
-                            if (which == 6) toggleDiagnostics(r);
-                            if (which == 7) confirmDelete(r);
+                            if (which == 3) showErrorReport(r);
+                            if (which == 4) pinShortcut(r);
+                            if (which == 5) toggleAds(r);
+                            if (which == 6) togglePreciseFaults(r);
+                            if (which == 7) toggleDiagnostics(r);
+                            if (which == 8) confirmDelete(r);
                         })
                 .show();
     }
@@ -274,6 +275,35 @@ public class LibraryActivity extends Activity {
             return;
         }
         Toast.makeText(this, "Restart the game to apply.", Toast.LENGTH_LONG).show();
+    }
+
+
+    /** Shows the Java exception/crash log, which is distinct from the native runtime report. */
+    private void showErrorReport(PluginRecord r) {
+        String report = Diagnostics.readErrorReport(this);
+        if (report == null) {
+            Toast.makeText(this, "No Java launch errors have been recorded for " + r.label + ".",
+                    Toast.LENGTH_LONG).show();
+            return;
+        }
+        File file = Diagnostics.errorReportFile(this);
+        String text = report + (file != null ? "\nfile: " + file.getAbsolutePath() + "\n" : "");
+        boolean copied = Diagnostics.copy(this, "ZettaBridge launch errors", text);
+
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        view.setTypeface(Typeface.MONOSPACE);
+        view.setTextIsSelectable(true);
+        int pad = dp(16);
+        view.setPadding(pad, pad, pad, pad);
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(view);
+        new AlertDialog.Builder(this)
+                .setTitle(copied ? "Last launch errors (copied)" : "Last launch errors")
+                .setView(scroll)
+                .setPositiveButton("Close", null)
+                .show();
     }
 
     /**
