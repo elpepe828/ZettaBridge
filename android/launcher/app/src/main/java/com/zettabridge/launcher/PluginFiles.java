@@ -26,7 +26,6 @@ final class PluginFiles {
 
     private PluginFiles() {}
 
-    /** Prefer native ARM64 when present; translate ARM32 only when it is the available ABI. */
     /** Supported ABIs, ordered with native ARM64 first for the chooser's presentation. */
     static List<String> supportedAbis(Set<String> abis) {
         List<String> supported = new ArrayList<>();
