@@ -211,25 +211,82 @@ public class LibraryActivity extends Activity {
     }
 
     private void showActions(PluginRecord r) {
+        List<String> actions = new ArrayList<>();
+        actions.add("Launch");
+        actions.add("Manage permissions");
+        actions.add("Last run report");
+        actions.add("Last launch error");
+        actions.add("Pin shortcut");
+        actions.add(r.hideAds ? "Show ads" : "Hide ads");
+        actions.add(r.preciseFaults ? "Precise faults: on" : "Precise faults (slow)");
+        actions.add(r.diagnostics ? "GL diagnostics: on" : "GL diagnostics (slow)");
+
+        String alternativeAbi = null;
+        String abiAction = null;
+        if (r.isTranslated() && r.hasArm64()) {
+            alternativeAbi = PluginRecord.ABI_ARM64;
+            abiAction = "Use ARM64 libraries (native)";
+        } else if (!r.isTranslated() && r.has32Bit()) {
+            alternativeAbi = PluginFiles.select32BitAbi(r.abis);
+            abiAction = "Use ARM32 translator";
+        }
+        final String requestedAbi = alternativeAbi;
+        int abiActionIndex = -1;
+        if (requestedAbi != null && abiAction != null) {
+            abiActionIndex = actions.size();
+            actions.add(abiAction);
+        }
+        final int switchActionIndex = abiActionIndex;
+        int deleteActionIndex = actions.size();
+        actions.add("Delete");
+
         new AlertDialog.Builder(this)
                 .setTitle(r.label)
-                .setItems(new String[] {"Launch", "Manage permissions", "Last run report", "Last launch error",
-                                        "Pin shortcut", r.hideAds ? "Show ads" : "Hide ads",
-                                        r.preciseFaults ? "Precise faults: on" : "Precise faults (slow)",
-                                        r.diagnostics ? "GL diagnostics: on" : "GL diagnostics (slow)",
-                                        "Delete"},
-                        (dialog, which) -> {
-                            if (which == 0) launch(r);
-                            if (which == 1) startActivity(PluginPermissionsActivity.intent(this, r.packageName));
-                            if (which == 2) showRuntimeReport(r);
-                            if (which == 3) showErrorReport(r);
-                            if (which == 4) pinShortcut(r);
-                            if (which == 5) toggleAds(r);
-                            if (which == 6) togglePreciseFaults(r);
-                            if (which == 7) toggleDiagnostics(r);
-                            if (which == 8) confirmDelete(r);
-                        })
+                .setItems(actions.toArray(new String[0]), (dialog, which) -> {
+                    if (which == 0) launch(r);
+                    if (which == 1) startActivity(PluginPermissionsActivity.intent(this, r.packageName));
+                    if (which == 2) showRuntimeReport(r);
+                    if (which == 3) showErrorReport(r);
+                    if (which == 4) pinShortcut(r);
+                    if (which == 5) toggleAds(r);
+                    if (which == 6) togglePreciseFaults(r);
+                    if (which == 7) toggleDiagnostics(r);
+                    if (which == switchActionIndex) switchAbi(r, requestedAbi);
+                    if (which == deleteActionIndex) confirmDelete(r);
+                })
                 .show();
+    }
+
+    /**
+     * Selects an ABI for this APK, not for a particular package. ARM64 stays the default when
+     * available; this lets users opt any dual-ABI app into the ARM32 translator for compatibility
+     * testing, while 32-bit-only APKs use the translator automatically.
+     */
+    private void switchAbi(PluginRecord r, String selectedAbi) {
+        if (selectedAbi == null) return;
+        stopGuestProcess();
+        String mode = PluginRecord.ABI_ARM64.equals(selectedAbi) ? "ARM64" : "ARM32 translator";
+        AlertDialog progress = new AlertDialog.Builder(this)
+                .setMessage("Reconfiguring " + r.label + " for " + mode + "...")
+                .setCancelable(false)
+                .show();
+        new Thread(() -> {
+            String message;
+            try {
+                PluginRecord updated = PluginStore.reselectAbi(this, r, selectedAbi);
+                message = "Updated " + updated.label + ": " + updated.status()
+                        + ". App data was preserved.";
+            } catch (Exception e) {
+                Log.e(TAG, "ABI switch failed for " + r.packageName, e);
+                message = "Could not switch ABI: " + e.getMessage();
+            }
+            String shown = message;
+            runOnUiThread(() -> {
+                progress.dismiss();
+                Toast.makeText(this, shown, Toast.LENGTH_LONG).show();
+                refresh();
+            });
+        }, "zb-abi-switch").start();
     }
 
     /** Ads are hidden per plugin; it takes effect the next time the plugin process starts. */
