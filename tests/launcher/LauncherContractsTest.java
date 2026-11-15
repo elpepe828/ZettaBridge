@@ -72,11 +72,18 @@ public final class LauncherContractsTest {
 
     private static void testAbiPriority() {
         Set<String> all = new HashSet<>(Arrays.asList("x86", "armeabi", "armeabi-v7a", "arm64-v8a"));
-        check("armeabi-v7a".equals(PluginFiles.selectAbi(all)), "v7a must win when 32-bit and 64-bit are present");
+        check("arm64-v8a".equals(PluginFiles.selectAbi(all)),
+                "native ARM64 is the automatic choice when available");
+        check("armeabi-v7a".equals(PluginFiles.select32BitAbi(all)),
+                "the ARM32 translator can be selected explicitly for any dual-ABI APK");
         all.remove("armeabi-v7a");
-        check("armeabi".equals(PluginFiles.selectAbi(all)), "armeabi 32-bit fallback before arm64");
+        check("armeabi".equals(PluginFiles.select32BitAbi(all)),
+                "the translator supports the legacy armeabi fallback");
         all.remove("armeabi");
-        check("arm64-v8a".equals(PluginFiles.selectAbi(all)), "arm64 is used when no 32-bit ABI exists");
+        check(PluginFiles.select32BitAbi(all) == null,
+                "no ARM32 translator choice exists when the APK has no ARM32 libraries");
+        check("arm64-v8a".equals(PluginFiles.selectAbi(all)),
+                "ARM64 remains available after removing ARM32 choices");
         all.remove("arm64-v8a");
         check(PluginFiles.selectAbi(all) == null, "unsupported ABI must not be selected");
         check(PluginFiles.selectAbi(new HashSet<>()) == null, "Java-only APK has no selected ABI");
