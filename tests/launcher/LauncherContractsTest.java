@@ -74,6 +74,9 @@ public final class LauncherContractsTest {
         Set<String> all = new HashSet<>(Arrays.asList("x86", "armeabi", "armeabi-v7a", "arm64-v8a"));
         check("arm64-v8a".equals(PluginFiles.selectAbi(all)),
                 "native ARM64 is the automatic choice when available");
+        check(PluginFiles.supportedAbis(all).equals(
+                        Arrays.asList("arm64-v8a", "armeabi-v7a", "armeabi")),
+                "the chooser exposes every supported ABI in a stable order");
         check("armeabi-v7a".equals(PluginFiles.select32BitAbi(all)),
                 "the ARM32 translator can be selected explicitly for any dual-ABI APK");
         all.remove("armeabi-v7a");
