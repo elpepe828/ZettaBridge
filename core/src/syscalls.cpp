@@ -763,6 +763,14 @@ std::int32_t sys_path_call(Ctx& c, std::uint32_t path_arg, long (*call)(Ctx&, co
 }
 
 
+std::int32_t sys_openat(Ctx& c, int host_flags) {
+    const char* path = guest_cstr(c.mem, c.a[1]);
+    if (!path) return -EFAULT;
+    const std::string host_path = c.proc.translate_path(path);
+    return result_of(::syscall(SYS_openat, static_cast<int>(c.a[0]), host_path.c_str(),
+                               host_flags, static_cast<mode_t>(c.a[3])));
+}
+
 std::int32_t sys_two_paths(Ctx& c, std::uint32_t first, std::uint32_t second,
                            long (*call)(Ctx&, const char*, const char*)) {
     const char* a = guest_cstr(c.mem, c.a[first]);
@@ -1248,10 +1256,7 @@ bool handle_syscall(Process& proc, GuestThread& thread) {
             if (watched) note_watched_open(guest_path, res);
             break;
         }
-        res = sys_path_call(c, 1, [host_flags](Ctx& x, const char* p) -> long {
-            return ::syscall(SYS_openat, static_cast<int>(x.a[0]), p, host_flags,
-                             static_cast<mode_t>(x.a[3]));
-        });
+        res = sys_openat(c, host_flags);
         if (watched) note_watched_open(guest_path, res);
         break;
     }
