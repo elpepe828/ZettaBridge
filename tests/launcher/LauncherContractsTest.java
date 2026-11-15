@@ -72,12 +72,12 @@ public final class LauncherContractsTest {
 
     private static void testAbiPriority() {
         Set<String> all = new HashSet<>(Arrays.asList("x86", "armeabi", "armeabi-v7a", "arm64-v8a"));
-        check("arm64-v8a".equals(PluginFiles.selectAbi(all)), "arm64 must win");
-        all.remove("arm64-v8a");
-        check("armeabi-v7a".equals(PluginFiles.selectAbi(all)), "v7a must win over armeabi");
+        check("armeabi-v7a".equals(PluginFiles.selectAbi(all)), "v7a must win when 32-bit and 64-bit are present");
         all.remove("armeabi-v7a");
-        check("armeabi".equals(PluginFiles.selectAbi(all)), "armeabi fallback");
+        check("armeabi".equals(PluginFiles.selectAbi(all)), "armeabi 32-bit fallback before arm64");
         all.remove("armeabi");
+        check("arm64-v8a".equals(PluginFiles.selectAbi(all)), "arm64 is used when no 32-bit ABI exists");
+        all.remove("arm64-v8a");
         check(PluginFiles.selectAbi(all) == null, "unsupported ABI must not be selected");
         check(PluginFiles.selectAbi(new HashSet<>()) == null, "Java-only APK has no selected ABI");
     }
@@ -142,7 +142,9 @@ public final class LauncherContractsTest {
         PluginRecord loaded = PluginRecord.load(record.dir);
         check(loaded != null && "armeabi-v7a".equals(loaded.selectedAbi), "selected ABI metadata");
         check(loaded.isTranslated() && loaded.isLaunchable(), "arm32 plugin ready");
-        check("32-bit armeabi-v7a: ready".equals(loaded.status()), "arm32 status");
+        check(loaded.status().startsWith("32-bit armeabi-v7a: ready")
+                        && loaded.status().contains("APK ABIs:"),
+                "arm32 status lists the available APK ABIs");
     }
 
     private static void testProxy(File root) throws Exception {
