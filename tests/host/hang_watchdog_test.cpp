@@ -17,9 +17,17 @@ bool contains(const std::string& text, const std::string& part) {
 }  // namespace
 
 int main() {
-    // record_thread_activity / snapshot_thread_activity: a fresh tid claims a slot, repeated
-    // calls bump the counter and update the recorded activity in place.
+    // The first call must be marked active before this tid has recorded any other activity.
     zb::record_thread_activity(9001, zb::ThreadActivityKind::kSyscall, 3);
+    {
+        const auto snapshot = zb::snapshot_thread_activity();
+        CHECK(snapshot.size() == 1);
+        CHECK(snapshot.front().tid == 9001);
+        CHECK(snapshot.front().counter == 1);
+        CHECK(zb::describe_thread_activity(snapshot.front()) == "sys:read(inside)");
+    }
+
+    // Repeated calls bump the counter and update the recorded activity in place.
     zb::record_thread_activity(9001, zb::ThreadActivityKind::kSyscall, 3);
     zb::record_thread_activity(9001, zb::ThreadActivityKind::kHostCall, 0x2a);
     {
@@ -47,24 +55,24 @@ int main() {
     zb::runtime_report().clear();
     using Clock = zb::HangWatchdog::Clock;
     Clock::time_point now{};
-    bool stuck_activity = true;  // toggled by the fake snapshot to simulate the moving thread
+    bool in_progress = true;
+    std::uint64_t moving_counter = 0;
 
     zb::HangWatchdog watchdog([&]() {
         std::vector<zb::ThreadActivitySample> out;
         zb::ThreadActivitySample stuck;
         stuck.tid = 111;
         stuck.kind = zb::ThreadActivityKind::kSyscall;
-        stuck.id = 7;
+        stuck.id = 3;
         stuck.counter = 42;  // never changes
+        stuck.in_progress = in_progress;
         out.push_back(stuck);
 
         zb::ThreadActivitySample moving;
         moving.tid = 222;
         moving.kind = zb::ThreadActivityKind::kHostCall;
         moving.id = 5;
-        static std::uint64_t moving_counter = 0;
-        if (stuck_activity) ++moving_counter;
-        moving.counter = moving_counter;
+        moving.counter = ++moving_counter;
         out.push_back(moving);
         return out;
     });
@@ -79,13 +87,16 @@ int main() {
     CHECK(watchdog.sample(now));
 
     const std::string text = zb::runtime_report().text();
-    CHECK(contains(text, "watch-1: 111=sys:"));
-    CHECK(contains(text, "x42"));
-    CHECK(contains(text, "stuck=6"));
+    CHECK(contains(text, "watch-1: 111=sys:read(inside) x42 stuck=6"));
     CHECK(!contains(text, "222=host:"));
 
-    // Once a thread starts moving again it drops out of the stuck list; if nothing new is stuck,
-    // no further note is written.
+    // A completed call can still be the last recorded activity, but is no longer "inside".
+    in_progress = false;
+    now += zb::HangWatchdog::kInterval;
+    CHECK(watchdog.sample(now));
+    CHECK(contains(zb::runtime_report().text(), "watch-2: 111=sys:read x42 stuck=9"));
+
+    // A thread whose counter advances every sample never produces a note.
     zb::runtime_report().clear();
     zb::HangWatchdog watchdog2([&]() {
         std::vector<zb::ThreadActivitySample> out;

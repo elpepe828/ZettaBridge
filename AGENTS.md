@@ -1860,3 +1860,15 @@ Report lines that localize this area: `jni-input-attach` (ident, looper, owner a
 reproducible one: whichever control is pressed first keeps working, and the other one ends the
 process - the shape of something initialized once, for one path only. The abort message in the
 native dump is the next piece of evidence; the report does not carry it.
+
+### 2026-11-18: Preserve call state in watchdog reports
+
+The watchdog marks a thread's first recorded call as active and preserves the full activity
+sample in `watch-N` notes. `(inside)` now distinguishes an in-progress syscall or host call
+from a completed call that still happens to be the thread's last activity. The threshold for
+reporting unchanged activity is unchanged.
+
+The expanded `hang_watchdog_test` reproduced both bugs before the fix. It and
+`runtime_report_test` passed when linked against the relevant core sources on x86_64 Linux;
+the watchdog test also passed 20 consecutive runs. This is not an Android build or device
+test, and it does not fix the Unity abort above.

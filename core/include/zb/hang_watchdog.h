@@ -25,9 +25,8 @@ enum class ThreadActivityKind : std::uint8_t {
 // every syscall and every host call, so it must stay cheap.
 void record_thread_activity(std::int32_t tid, ThreadActivityKind kind, std::uint32_t id);
 
-// The host call recorded last for this thread has returned. A thread whose last recorded event is
-// still in progress is blocked inside our own code, which reads very differently from a guest
-// that simply stopped calling out.
+// The recorded host call or syscall has returned. An in-progress event means the thread has
+// not yet returned from the bridge, rather than simply having stopped calling out of guest code.
 void record_thread_activity_done(std::int32_t tid);
 
 struct ThreadActivitySample {
@@ -41,7 +40,8 @@ struct ThreadActivitySample {
 // A snapshot of every guest thread slot touched so far.
 std::vector<ThreadActivitySample> snapshot_thread_activity();
 
-// "sys:openat" or "host:0x2a3"; "(none)" for a slot that was never recorded.
+// "sys:openat" or "host:0x2a3", suffixed with "(inside)" while the call is in progress.
+// Returns "(none)" for a slot that was never recorded.
 std::string describe_thread_activity(const ThreadActivitySample& sample);
 
 // Periodically samples snapshot_thread_activity() and records a report note when one or more
@@ -67,10 +67,7 @@ public:
 
 private:
     struct State {
-        std::int32_t tid = 0;
-        ThreadActivityKind kind = ThreadActivityKind::kNone;
-        std::uint32_t id = 0;
-        std::uint64_t counter = 0;
+        ThreadActivitySample activity;
         Clock::time_point since{};  // when this (kind, id, counter) was first observed
         int unchanged_samples = 0;
     };
