@@ -1861,6 +1861,12 @@ reproducible one: whichever control is pressed first keeps working, and the othe
 process - the shape of something initialized once, for one path only. The abort message in the
 native dump is the next piece of evidence; the report does not carry it.
 
+### 2026-11-18: Capture the Unity exit without changing the runtime
+
+Use `docs/unity-exit-capture.md` for the phone-only steps or `tools/capture_guest_exit.py` to
+collect the runtime report and PID-scoped Android logs from the same reproduction. The full
+Android crash buffer is opt-in and private until reviewed. Status 134 alone does not distinguish
+an explicit exit from a signal; no cause is assumed and no guest behavior changes.
 ### 2026-11-18: Preserve call state in watchdog reports
 
 The watchdog marks a thread's first recorded call as active and preserves the full activity
