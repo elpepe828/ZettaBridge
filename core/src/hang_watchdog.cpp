@@ -75,6 +75,7 @@ void record_thread_activity(std::int32_t tid, ThreadActivityKind kind, std::uint
     free_slot->kind.store(static_cast<std::uint8_t>(kind), std::memory_order_relaxed);
     free_slot->id.store(id, std::memory_order_relaxed);
     free_slot->counter.store(1, std::memory_order_relaxed);
+    free_slot->in_progress.store(true, std::memory_order_relaxed);
     mine = free_slot;
     mine_tid = tid;
 }
@@ -226,20 +227,18 @@ bool HangWatchdog::sample(Clock::time_point now) {
     std::vector<State> next;
     next.reserve(current.size());
     for (const ThreadActivitySample& sample : current) {
-        State* prior = nullptr;
-        for (State& state : previous_) {
-            if (state.tid == sample.tid) {
+        const State* prior = nullptr;
+        for (const State& state : previous_) {
+            if (state.activity.tid == sample.tid) {
                 prior = &state;
                 break;
             }
         }
         State state;
-        state.tid = sample.tid;
-        state.kind = sample.kind;
-        state.id = sample.id;
-        state.counter = sample.counter;
-        if (prior != nullptr && prior->kind == sample.kind && prior->id == sample.id &&
-            prior->counter == sample.counter) {
+        state.activity = sample;
+        // Keep the existing progress heuristic; in_progress only describes the current sample.
+        if (prior != nullptr && prior->activity.kind == sample.kind &&
+            prior->activity.id == sample.id && prior->activity.counter == sample.counter) {
             state.since = prior->since;
             state.unchanged_samples = prior->unchanged_samples + 1;
         } else {
@@ -263,16 +262,12 @@ bool HangWatchdog::sample(Clock::time_point now) {
     for (const State* state : stuck) {
         if (shown >= kMaxThreadsShown) break;
         if (shown > 0) value += " | ";
-        ThreadActivitySample sample;
-        sample.tid = state->tid;
-        sample.kind = state->kind;
-        sample.id = state->id;
-        sample.counter = state->counter;
+        const ThreadActivitySample& sample = state->activity;
         const auto seconds =
             std::chrono::duration_cast<std::chrono::seconds>(now - state->since).count();
-        value += std::to_string(state->tid) + "=" + describe_thread_activity(sample) +
-                 " x" + std::to_string(state->counter) + " stuck=" + std::to_string(seconds) +
-                 " " + thread_kernel_state(state->tid);
+        value += std::to_string(sample.tid) + "=" + describe_thread_activity(sample) +
+                 " x" + std::to_string(sample.counter) + " stuck=" + std::to_string(seconds) +
+                 " " + thread_kernel_state(sample.tid);
         ++shown;
     }
     value += " | recent-jni: " + jni_recent_calls();
