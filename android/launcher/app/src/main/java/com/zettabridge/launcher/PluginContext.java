@@ -10,7 +10,9 @@ import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.DatabaseErrorHandler;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Binder;
 import android.os.Bundle;
+import android.os.Process;
 import android.view.Display;
 import android.view.LayoutInflater;
 
@@ -35,6 +37,10 @@ final class PluginContext extends ContextWrapper {
     private final Resources resources;
     private Resources.Theme theme;
     private LayoutInflater inflater;
+
+    LoadedPlugin plugin() {
+        return plugin;
+    }
 
     PluginContext(Context base, LoadedPlugin plugin) {
         this(base, plugin, plugin.resources);
@@ -75,6 +81,18 @@ final class PluginContext extends ContextWrapper {
         return plugin.appInfo;
     }
 
+    /** Guest code sees the imported APK's package name; OS services retain the host identity. */
+    @Override
+    public String getPackageName() {
+        return plugin.packageName;
+    }
+
+    /** AppOps and package-attribution checks must use the package actually installed for this UID. */
+    @Override
+    public String getOpPackageName() {
+        return getBaseContext().getOpPackageName();
+    }
+
     @Override
     public String getPackageCodePath() {
         return plugin.appInfo.sourceDir;
@@ -88,6 +106,46 @@ final class PluginContext extends ContextWrapper {
     @Override
     public Context getApplicationContext() {
         return plugin.application != null ? plugin.application : super.getApplicationContext();
+    }
+
+    /** A plugin cannot observe host permissions that its own APK did not request. */
+    @Override
+    public int checkSelfPermission(String permission) {
+        if (!plugin.requestsPermission(permission)) return PackageManager.PERMISSION_DENIED;
+        return super.checkSelfPermission(permission);
+    }
+
+    /** Keep explicit pid/uid checks consistent with checkSelfPermission for this process. */
+    @Override
+    public int checkPermission(String permission, int pid, int uid) {
+        if (pid == Process.myPid() && uid == Process.myUid() && !plugin.requestsPermission(permission)) {
+            return PackageManager.PERMISSION_DENIED;
+        }
+        return super.checkPermission(permission, pid, uid);
+    }
+
+    @Override
+    public int checkCallingOrSelfPermission(String permission) {
+        if (Binder.getCallingPid() == Process.myPid() && Binder.getCallingUid() == Process.myUid()) {
+            return checkSelfPermission(permission);
+        }
+        return super.checkCallingOrSelfPermission(permission);
+    }
+
+    @Override
+    public void enforcePermission(String permission, int pid, int uid, String message) {
+        if (checkPermission(permission, pid, uid) != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException(message != null ? message : "Permission denied: " + permission);
+        }
+        super.enforcePermission(permission, pid, uid, message);
+    }
+
+    @Override
+    public void enforceCallingOrSelfPermission(String permission, String message) {
+        if (checkCallingOrSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+            throw new SecurityException(message != null ? message : "Permission denied: " + permission);
+        }
+        super.enforceCallingOrSelfPermission(permission, message);
     }
 
     // Derived contexts.

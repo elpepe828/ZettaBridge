@@ -1,3 +1,13 @@
+# Native JNI entry thunks use the AArch64 calling convention. The Android
+# launcher is arm64-v8a; x86 host tests only need stable placeholder addresses
+# for RegisterNatives and must not try to assemble or execute AArch64 code.
+if (CMAKE_ANDROID_ARCH_ABI STREQUAL "arm64-v8a" OR
+    CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    set(ZB_NATIVE_THUNKS src/jni/thunks.S)
+else()
+    set(ZB_NATIVE_THUNKS src/jni/thunks_host_stub.S)
+endif()
+
 add_library(zbcore STATIC
     src/android/host_looper.cpp
     src/android/host_native_window.cpp
@@ -34,7 +44,7 @@ add_library(zbcore STATIC
     src/jni/native_thunks.cpp
     src/jni/proxy_runtime.cpp
     src/jni/shorty.cpp
-    src/jni/thunks.S
+    ${ZB_NATIVE_THUNKS}
     src/library_runtime.cpp
     src/log.cpp
     src/proc_files.cpp

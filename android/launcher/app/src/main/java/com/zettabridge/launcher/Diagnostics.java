@@ -27,6 +27,7 @@ import java.util.Locale;
 final class Diagnostics {
     private static final String TAG = "zb-launcher";
     private static final String REPORT_NAME = "zb-runtime-report.txt";
+    private static final String ERRORS_NAME = "zb-errors.txt";
 
     private Diagnostics() {}
 
@@ -64,6 +65,26 @@ final class Diagnostics {
             return text.isEmpty() ? null : text;
         } catch (IOException | RuntimeException e) {
             Log.w(TAG, "cannot read the runtime report: " + e);
+            return null;
+        }
+    }
+
+
+    /** The accumulated Java launch/crash errors, or null when external storage is unavailable. */
+    static File errorReportFile(Context context) {
+        File dir = context.getExternalFilesDir(null);
+        return dir == null ? null : new File(dir, ERRORS_NAME);
+    }
+
+    /** Reads the Java launch/crash errors separately from the native translator report. */
+    static String readErrorReport(Context context) {
+        File file = errorReportFile(context);
+        if (file == null || !file.isFile()) return null;
+        try {
+            String text = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            return text.isEmpty() ? null : text;
+        } catch (IOException | RuntimeException e) {
+            Log.w(TAG, "cannot read the launch error report: " + e);
             return null;
         }
     }

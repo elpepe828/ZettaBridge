@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Suspension bridge arc -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M18,65 C28,34 41,20 54,20 C67,20 80,34 90,65"
+        android:strokeColor="#42D8C8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round" />
+
+    <!-- Bridge deck and towers -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M18,65 H90 M30,41 V79 M78,41 V79"
+        android:strokeColor="#42D8C8"
+        android:strokeWidth="5"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Cable supports -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M30,41 L45,65 M78,41 L63,65"
+        android:strokeColor="#8FAEFF"
+        android:strokeWidth="4"
+        android:strokeLineCap="round" />
+
+    <!-- A clear Z mark: ZettaBridge connects two sides -->
+    <path
+        android:fillColor="#00000000"
+        android:pathData="M37,34 H71 L37,72 H71"
+        android:strokeColor="#FFD17A"
+        android:strokeWidth="7"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
+    <!-- Connection points -->
+    <path
+        android:fillColor="#F4F7FF"
+        android:pathData="M12,65 A6,6 0 1,0 24,65 A6,6 0 1,0 12,65 M84,65 A6,6 0 1,0 96,65 A6,6 0 1,0 84,65" />
+</vector>

@@ -17,7 +17,7 @@ set(ZB_HOST_TESTS
     jni_mangle_test
     jni_shorty_test
     native_activity_test
-    native_thunk_test
+    open_flags_test
     path_translation_test
     platform_compat_test
     proxy_runtime_test
@@ -31,6 +31,17 @@ foreach(test_name ${ZB_HOST_TESTS})
     target_link_libraries(${test_name} PRIVATE zbcore)
     add_test(NAME ${test_name} COMMAND ${test_name})
 endforeach()
+
+# This test calls the precompiled AArch64 thunk pool using the AAPCS64 ABI.
+# The x86_64 CI host can validate the remaining JNI bridge, but cannot execute
+# that machine code. The Android arm64 build still compiles the production pool.
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
+    add_executable(native_thunk_test native_thunk_test.cpp)
+    target_link_libraries(native_thunk_test PRIVATE zbcore)
+    add_test(NAME native_thunk_test COMMAND native_thunk_test)
+else()
+    message(STATUS "Skipping native_thunk_test: AArch64 machine code requires an ARM64 host")
+endif()
 
 # The committed tools/gen_jni.py outputs match jni.h and the generator.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

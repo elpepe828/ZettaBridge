@@ -22,7 +22,8 @@ import com.zettabridge.core.ZBridge;
 /** Imported plugins on disk. Import is staged and published only after every native fixup succeeds. */
 final class PluginStore {
     static final int ARCHIVE_FLAGS = PackageManager.GET_ACTIVITIES | PackageManager.GET_PROVIDERS
-            | PackageManager.GET_SERVICES | PackageManager.GET_RECEIVERS | PackageManager.GET_META_DATA;
+            | PackageManager.GET_SERVICES | PackageManager.GET_RECEIVERS | PackageManager.GET_META_DATA
+            | PackageManager.GET_PERMISSIONS;
 
     private PluginStore() {}
 
@@ -124,6 +125,88 @@ final class PluginStore {
             return published;
         } finally {
             tmp.delete();
+            PluginFiles.deleteRecursive(staging);
+        }
+    }
+
+    /**
+     * Rebuilds one imported plugin for another ABI without discarding its private app data.
+     * This is package-agnostic: any APK that contains both ARM64 and ARM32 libraries can switch
+     * between native ARM64 and the translated ARM32 runtime.
+     */
+    static PluginRecord reselectAbi(Context c, PluginRecord current, String selectedAbi) throws IOException {
+        if (selectedAbi == null || !current.abis.contains(selectedAbi)) {
+            throw new IOException("the APK does not contain ABI " + selectedAbi);
+        }
+        if (!PluginRecord.ABI_ARM64.equals(selectedAbi)
+                && !PluginRecord.ABI_ARM32.equals(selectedAbi)
+                && !PluginRecord.ABI_ARM32_V7A.equals(selectedAbi)) {
+            throw new IOException("unsupported ARM ABI " + selectedAbi);
+        }
+
+        File plugins = root(c);
+        File staging = new File(plugins, "." + current.packageName + ".abi-switching");
+        PluginFiles.deleteRecursive(staging);
+        if (!staging.mkdirs()) throw new IOException("cannot create " + staging);
+        try {
+            PluginRecord next = new PluginRecord(staging);
+            try (InputStream in = new java.io.FileInputStream(current.apk())) {
+                PluginFiles.copyAtomic(in, next.apk());
+            }
+            if (!next.apk().setReadOnly()) {
+                throw new IOException("cannot make APK read-only: " + next.apk());
+            }
+
+            PackageManager pm = c.getPackageManager();
+            PackageInfo info = pm.getPackageArchiveInfo(next.apk().getPath(), ARCHIVE_FLAGS);
+            if (info == null || info.applicationInfo == null
+                    || !current.packageName.equals(info.packageName)) {
+                throw new IOException("cannot read the imported APK metadata for " + current.packageName);
+            }
+
+            next.packageName = current.packageName;
+            next.versionName = info.versionName;
+            next.targetSdk = info.applicationInfo.targetSdkVersion;
+            next.abis.addAll(PluginFiles.scanAbis(next.apk()));
+            if (!next.abis.contains(selectedAbi)) {
+                throw new IOException("the imported APK no longer contains ABI " + selectedAbi);
+            }
+            next.selectedAbi = selectedAbi;
+            next.hideAds = current.hideAds;
+            next.preciseFaults = current.preciseFaults;
+            next.diagnostics = current.diagnostics;
+
+            ApplicationInfo ai = applicationInfo(info, next);
+            final boolean translated = next.isTranslated();
+            if (translated) RuntimeBundle.install(c);
+            PluginFiles.extractLibraries(next.apk(), next.libDir(), selectedAbi, library -> {
+                if (!translated) return;
+                String result = ZBridge.fixGuestLibrary(library.getPath());
+                if (result == null || result.startsWith("skipped:")) {
+                    throw new IOException("cannot prepare " + library.getName() + ": " + result);
+                }
+            });
+
+            CharSequence label = ai.loadLabel(pm);
+            next.label = label != null && label.length() > 0 ? label.toString() : next.packageName;
+            saveIcon(ai.loadIcon(pm), next.iconFile());
+            try {
+                next.launcherActivity = ManifestReader.findLauncherActivity(
+                        pm.getResourcesForApplication(ai), next.packageName);
+            } catch (PackageManager.NameNotFoundException e) {
+                next.launcherActivity = null;
+            }
+
+            // Publish only after every ABI-specific native library has been extracted and fixed.
+            // replaceDirectoryKeeping restores the old plugin if publication fails and retains data/.
+            next.save();
+            PluginFiles.replaceDirectoryKeeping(staging, current.dir, "data");
+            PluginRecord published = PluginRecord.load(current.dir);
+            if (published == null) {
+                throw new IOException("cannot read updated plugin metadata for " + current.packageName);
+            }
+            return published;
+        } finally {
             PluginFiles.deleteRecursive(staging);
         }
     }

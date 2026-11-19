@@ -40,14 +40,54 @@ public final class LauncherContractsTest {
         return apk;
     }
 
+    private static void testPermissionPolicy() {
+        check(!PluginPermissionPolicy.requests(null, "android.permission.CAMERA"),
+                "missing manifest permissions must be denied");
+        check(!PluginPermissionPolicy.requests(new String[0], "android.permission.CAMERA"),
+                "empty manifest permissions must be denied");
+        String[] requested = {"android.permission.CAMERA", "android.permission.RECORD_AUDIO"};
+        check(PluginPermissionPolicy.requests(requested, "android.permission.CAMERA"),
+                "declared permission must be visible");
+        check(!PluginPermissionPolicy.requests(requested, "android.permission.ACCESS_FINE_LOCATION"),
+                "undeclared permission must not be visible");
+        check(PluginPermissionPolicy.firstUndeclared(requested,
+                        new String[] {"android.permission.CAMERA", "android.permission.RECORD_AUDIO"}) == null,
+                "all declared runtime permissions may be requested");
+        check("android.permission.ACCESS_FINE_LOCATION".equals(
+                        PluginPermissionPolicy.firstUndeclared(requested,
+                                new String[] {"android.permission.CAMERA", "android.permission.ACCESS_FINE_LOCATION"})),
+                "mixed request must identify its first undeclared permission");
+        check(PluginPermissionPolicy.firstUndeclared(requested, new String[0]) == null,
+                "empty request is left for framework validation");
+        check("com.zettabridge.launcher".equals(PluginPermissionPolicy.mapPackageToHost(
+                        "com.example.plugin", "com.zettabridge.launcher", "com.example.plugin")),
+                "plugin package maps to the installed host package");
+        check("com.zettabridge.launcher".equals(PluginPermissionPolicy.mapPackageToHost(
+                        "com.zettabridge.launcher", "com.zettabridge.launcher", "com.example.plugin")),
+                "host package remains unchanged");
+        check(PluginPermissionPolicy.mapPackageToHost(
+                        "com.example.other", "com.zettabridge.launcher", "com.example.plugin") == null,
+                "unrelated packages are not remapped");
+    }
+
     private static void testAbiPriority() {
         Set<String> all = new HashSet<>(Arrays.asList("x86", "armeabi", "armeabi-v7a", "arm64-v8a"));
-        check("arm64-v8a".equals(PluginFiles.selectAbi(all)), "arm64 must win");
-        all.remove("arm64-v8a");
-        check("armeabi-v7a".equals(PluginFiles.selectAbi(all)), "v7a must win over armeabi");
+        check("arm64-v8a".equals(PluginFiles.selectAbi(all)),
+                "native ARM64 is the automatic choice when available");
+        check(PluginFiles.supportedAbis(all).equals(
+                        Arrays.asList("arm64-v8a", "armeabi-v7a", "armeabi")),
+                "the chooser exposes every supported ABI in a stable order");
+        check("armeabi-v7a".equals(PluginFiles.select32BitAbi(all)),
+                "the ARM32 translator can be selected explicitly for any dual-ABI APK");
         all.remove("armeabi-v7a");
-        check("armeabi".equals(PluginFiles.selectAbi(all)), "armeabi fallback");
+        check("armeabi".equals(PluginFiles.select32BitAbi(all)),
+                "the translator supports the legacy armeabi fallback");
         all.remove("armeabi");
+        check(PluginFiles.select32BitAbi(all) == null,
+                "no ARM32 translator choice exists when the APK has no ARM32 libraries");
+        check("arm64-v8a".equals(PluginFiles.selectAbi(all)),
+                "ARM64 remains available after removing ARM32 choices");
+        all.remove("arm64-v8a");
         check(PluginFiles.selectAbi(all) == null, "unsupported ABI must not be selected");
         check(PluginFiles.selectAbi(new HashSet<>()) == null, "Java-only APK has no selected ABI");
     }
@@ -112,7 +152,9 @@ public final class LauncherContractsTest {
         PluginRecord loaded = PluginRecord.load(record.dir);
         check(loaded != null && "armeabi-v7a".equals(loaded.selectedAbi), "selected ABI metadata");
         check(loaded.isTranslated() && loaded.isLaunchable(), "arm32 plugin ready");
-        check("32-bit armeabi-v7a: ready".equals(loaded.status()), "arm32 status");
+        check(loaded.status().startsWith("32-bit armeabi-v7a: ready")
+                        && loaded.status().contains("APK ABIs:"),
+                "arm32 status lists the available APK ABIs");
     }
 
     private static void testProxy(File root) throws Exception {
@@ -150,6 +192,7 @@ public final class LauncherContractsTest {
     public static void main(String[] args) throws Exception {
         File root = Files.createTempDirectory("zb-launcher-contracts-").toFile();
         try {
+            testPermissionPolicy();
             testAbiPriority();
             testNamesAndDelegation();
             testExtractionAndMetadata(root);

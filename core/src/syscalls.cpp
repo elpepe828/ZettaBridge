@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <climits>
+#include <cstddef>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
@@ -45,6 +46,7 @@
 #include "zb/guest_thread.h"
 #include "zb/hang_watchdog.h"
 #include "zb/log.h"
+#include "zb/open_flags.h"
 #include "zb/process.h"
 #include "zb/runtime_report.h"
 
@@ -79,6 +81,16 @@ struct Ctx {
     // Set by rt_sigreturn: r0 was restored from the signal frame and must not be overwritten.
     bool no_result = false;
 };
+
+// Android's AArch32 sys/epoll.h keeps the 64-bit data union naturally aligned
+// (data starts at byte 8, total size 16). The x86_64 host epoll_event is packed
+// to 12 bytes, so guest memory must never be passed to the host epoll syscalls directly.
+struct GuestEpollEvent {
+    std::uint32_t events;
+    alignas(8) std::uint64_t data;
+};
+static_assert(offsetof(GuestEpollEvent, data) == 8);
+static_assert(sizeof(GuestEpollEvent) == 16);
 
 // Marks the thread as asleep in a host syscall for as long as it lives, so a guest signal posted
 // to this thread breaks that syscall instead of waiting for it to end on its own.
@@ -762,6 +774,14 @@ std::int32_t sys_path_call(Ctx& c, std::uint32_t path_arg, long (*call)(Ctx&, co
 }
 
 
+std::int32_t sys_openat(Ctx& c, int host_flags) {
+    const char* path = guest_cstr(c.mem, c.a[1]);
+    if (!path) return -EFAULT;
+    const std::string host_path = c.proc.translate_path(path);
+    return result_of(::syscall(SYS_openat, static_cast<int>(c.a[0]), host_path.c_str(),
+                               host_flags, static_cast<mode_t>(c.a[3])));
+}
+
 std::int32_t sys_two_paths(Ctx& c, std::uint32_t first, std::uint32_t second,
                            long (*call)(Ctx&, const char*, const char*)) {
     const char* a = guest_cstr(c.mem, c.a[first]);
@@ -1032,11 +1052,26 @@ std::int32_t sys_recvmsg(Ctx& c) {
 std::int32_t sys_epoll_wait(Ctx& c) {
     const int max_events = static_cast<int>(c.a[2]);
     if (max_events <= 0 || max_events > 65536) return -EINVAL;
-    std::uint8_t* events = c.mem.host_ptr(c.a[1], static_cast<std::uint64_t>(max_events) * sizeof(epoll_event), kPageWrite);
-    if (events == nullptr) return -EFAULT;
+    const std::uint64_t guest_size = static_cast<std::uint64_t>(max_events) * sizeof(GuestEpollEvent);
+    std::uint8_t* guest_events = c.mem.host_ptr(c.a[1], guest_size, kPageWrite);
+    if (guest_events == nullptr) return -EFAULT;
+
+    // Host and AArch32 epoll_event layouts differ on x86_64 (12 vs. 16 bytes).
+    // Use host-native events for the syscall, then marshal them into the guest ABI.
+    std::vector<epoll_event> host_events(static_cast<std::size_t>(max_events));
     // epoll_pwait's guest signal mask is ignored: guest masks are emulated.
-    return result_of(::epoll_pwait(static_cast<int>(c.a[0]), reinterpret_cast<epoll_event*>(events), max_events,
-                                   static_cast<int>(c.a[3]), nullptr));
+    const int count = ::epoll_pwait(static_cast<int>(c.a[0]), host_events.data(), max_events,
+                                    static_cast<int>(c.a[3]), nullptr);
+    if (count <= 0) return result_of(count);
+
+    for (int i = 0; i < count; ++i) {
+        const GuestEpollEvent event{
+                host_events[static_cast<std::size_t>(i)].events,
+                host_events[static_cast<std::size_t>(i)].data.u64};
+        std::memcpy(guest_events + static_cast<std::size_t>(i) * sizeof(GuestEpollEvent),
+                    &event, sizeof(event));
+    }
+    return count;
 }
 
 bool read_itimerval(GuestMemory& m, std::uint32_t addr, itimerval& out) {
@@ -1238,13 +1273,16 @@ bool handle_syscall(Process& proc, GuestThread& thread) {
     case NR_openat: {
         const char* guest_path = guest_cstr(c.mem, c.a[1]);
         const bool watched = open_worth_watching(guest_path);
-        if (guest_path != nullptr && proc.open_synthetic_file(guest_path, static_cast<int>(c.a[2]), res)) {
+        int host_flags = 0;
+        if (!translate_arm_open_flags(c.a[2], host_flags)) {
+            res = -EINVAL;
+            break;
+        }
+        if (guest_path != nullptr && proc.open_synthetic_file(guest_path, host_flags, res)) {
             if (watched) note_watched_open(guest_path, res);
             break;
         }
-        res = sys_path_call(c, 1, [](Ctx& x, const char* p) -> long {
-            return ::syscall(SYS_openat, static_cast<int>(x.a[0]), p, static_cast<int>(x.a[2]), static_cast<mode_t>(x.a[3]));
-        });
+        res = sys_openat(c, host_flags);
         if (watched) note_watched_open(guest_path, res);
         break;
     }
@@ -1562,13 +1600,22 @@ bool handle_syscall(Process& proc, GuestThread& thread) {
     case NR_eventfd2: res = result_of(::syscall(SYS_eventfd2, c.a[0], static_cast<int>(c.a[1]))); break;
     case NR_epoll_create1: res = result_of(::epoll_create1(static_cast<int>(c.a[0]))); break;
     case NR_epoll_ctl: {
-        std::uint8_t* event = c.a[3] != 0 ? c.mem.host_ptr(c.a[3], sizeof(epoll_event), kPageRead) : nullptr;
-        if (c.a[3] != 0 && !event) {
-            res = -EFAULT;
-        } else {
-            res = result_of(::epoll_ctl(static_cast<int>(c.a[0]), static_cast<int>(c.a[1]), static_cast<int>(c.a[2]),
-                                        reinterpret_cast<epoll_event*>(event)));
+        epoll_event host_event{};
+        epoll_event* host_event_ptr = nullptr;
+        if (c.a[3] != 0) {
+            std::uint8_t* guest_bytes = c.mem.host_ptr(c.a[3], sizeof(GuestEpollEvent), kPageRead);
+            if (!guest_bytes) {
+                res = -EFAULT;
+                break;
+            }
+            GuestEpollEvent guest_event{};
+            std::memcpy(&guest_event, guest_bytes, sizeof(guest_event));
+            host_event.events = guest_event.events;
+            host_event.data.u64 = guest_event.data;
+            host_event_ptr = &host_event;
         }
+        res = result_of(::epoll_ctl(static_cast<int>(c.a[0]), static_cast<int>(c.a[1]),
+                                    static_cast<int>(c.a[2]), host_event_ptr));
         break;
     }
     case NR_epoll_wait:

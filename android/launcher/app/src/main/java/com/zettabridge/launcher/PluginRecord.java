@@ -81,10 +81,11 @@ final class PluginRecord {
 
     String status() {
         if (launcherActivity == null) return "no launcher activity";
-        if (ABI_ARM64.equals(selectedAbi)) return "arm64: ready";
-        if (isTranslated()) return "32-bit " + selectedAbi + ": ready";
+        String available = abis.isEmpty() ? "" : " (APK ABIs: " + abis + ")";
+        if (ABI_ARM64.equals(selectedAbi)) return "arm64: ready" + available;
+        if (isTranslated()) return "32-bit " + selectedAbi + ": ready" + available;
         if (abis.isEmpty()) return "Java only: ready";
-        if (has32Bit()) return "32-bit: reimport required";
+        if (has32Bit()) return "32-bit: reimport required" + available;
         return "unsupported ABIs: " + abis;
     }
 
