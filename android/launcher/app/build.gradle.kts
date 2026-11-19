@@ -17,6 +17,7 @@ if (signingPropsFile.isFile) {
 }
 val releaseKeystore: File? = signingProps.getProperty("storeFile")?.let { path -> File(path) }
 val hasReleaseKey = releaseKeystore != null && releaseKeystore.isFile
+val sideBySideDebug = providers.gradleProperty("zbSideBySide").orNull == "true"
 
 android {
     namespace = "com.zettabridge.launcher"
@@ -28,6 +29,7 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        manifestPlaceholders["launcherLabel"] = "ZettaBridge"
         ndk { abiFilters += "arm64-v8a" }
     }
 
@@ -42,6 +44,12 @@ android {
         }
     }
     buildTypes {
+        debug {
+            if (sideBySideDebug) {
+                applicationIdSuffix = ".test"
+                manifestPlaceholders["launcherLabel"] = "ZettaBridge Test"
+            }
+        }
         release {
             isMinifyEnabled = false
             if (hasReleaseKey) signingConfig = signingConfigs.getByName("release")
