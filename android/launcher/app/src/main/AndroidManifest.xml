@@ -88,6 +88,8 @@
         android:label="ZettaBridge"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
+        android:label="${launcherLabel}"
+        android:icon="@android:drawable/sym_def_app_icon"
         android:theme="@android:style/Theme.Material.Light.DarkActionBar">
 
         <activity
@@ -106,14 +108,14 @@
             android:name=".PluginSwitchActivity"
             android:exported="true"
             android:excludeFromRecents="true"
-            android:taskAffinity="com.zettabridge.launcher.switch"
+            android:taskAffinity="${applicationId}.switch"
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
 
         <activity
             android:name=".GuestLaunchActivity"
             android:exported="true"
             android:process=":guest"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.NoDisplay" />
 
         <!-- User-facing permission status and special-access settings for imported APKs. -->
@@ -129,7 +131,7 @@
             android:hardwareAccelerated="true"
             android:launchMode="standard"
             android:process=":guest"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.Material.NoActionBar" />
         <activity
             android:name=".Stubs$Landscape"
@@ -139,7 +141,7 @@
             android:launchMode="standard"
             android:process=":guest"
             android:screenOrientation="sensorLandscape"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.Material.NoActionBar" />
         <activity
             android:name=".Stubs$Portrait"
@@ -149,7 +151,7 @@
             android:launchMode="standard"
             android:process=":guest"
             android:screenOrientation="sensorPortrait"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.Material.NoActionBar" />
         <activity
             android:name=".Stubs$SingleTop"
@@ -158,7 +160,7 @@
             android:hardwareAccelerated="true"
             android:launchMode="singleTop"
             android:process=":guest"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.Material.NoActionBar" />
         <activity
             android:name=".Stubs$SingleTask"
@@ -167,7 +169,7 @@
             android:hardwareAccelerated="true"
             android:launchMode="singleTask"
             android:process=":guest"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.Material.NoActionBar" />
         <activity
             android:name=".Stubs$SingleInstance"
@@ -176,7 +178,7 @@
             android:hardwareAccelerated="true"
             android:launchMode="singleInstance"
             android:process=":guest"
-            android:taskAffinity="com.zettabridge.launcher.guest"
+            android:taskAffinity="${applicationId}.guest"
             android:theme="@android:style/Theme.Material.NoActionBar" />
         <!-- AndroidIDE injects the Kotlin-based LogWire logger into debug builds. This app has no
              Kotlin stdlib, so its init provider crashes the main process. Drop it. -->

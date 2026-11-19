@@ -90,6 +90,11 @@ package installation. A single APK that can run inside a host process is require
 
 ## Roadmap
 
+The goal is one launcher for a broad range of Android apps and games, not a collection
+of fixes for individual packages. Real apps help expose missing behavior; the fixes and
+regression tests target the shared platform feature. See the [compatibility plan](docs/compatibility.md)
+for test coverage, priorities, and what counts as verified support.
+
 | Milestone | What it brings |
 |---|---|
 | **v0.1** | 32-bit apps whose native libraries do not draw on their own: utilities and apps using old native libs for crypto, image processing, parsers, databases. |

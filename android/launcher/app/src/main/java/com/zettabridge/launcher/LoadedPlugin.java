@@ -5,6 +5,7 @@ import android.content.ContentProvider;
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.ComponentInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
@@ -34,10 +35,10 @@ final class LoadedPlugin {
     final ClassLoader classLoader;
     /** Plugin activities by fully qualified class name. */
     final Map<String, ActivityInfo> activities = new HashMap<>();
-    /** Services, receivers and providers by class name, for package manager virtualization. */
-    final Map<String, ServiceInfo> services = new HashMap<>();
-    final Map<String, ActivityInfo> receivers = new HashMap<>();
-    final Map<String, ProviderInfo> providerInfos = new HashMap<>();
+    /** Component indexes are populated before onParsed publishes this plugin, then only read. */
+    private final Map<String, ServiceInfo> services = new HashMap<>();
+    private final Map<String, ActivityInfo> receivers = new HashMap<>();
+    private final Map<String, ProviderInfo> providerInfos = new HashMap<>();
     /** The parsed archive (version, meta-data). */
     PackageInfo info;
     /** Content providers started in-process (kept alive for the process lifetime). */
@@ -59,6 +60,16 @@ final class LoadedPlugin {
 
     Bitmap icon() {
         return record.icon();
+    }
+
+    ComponentInfo componentInfo(String method, String className) {
+        switch (method) {
+            case "getServiceInfo": return services.get(className);
+            case "getActivityInfo": return activities.get(className);
+            case "getReceiverInfo": return receivers.get(className);
+            case "getProviderInfo": return providerInfos.get(className);
+            default: return null;
+        }
     }
 
     /** onParsed runs before the plugin Application is created (the runtime marks it current). */

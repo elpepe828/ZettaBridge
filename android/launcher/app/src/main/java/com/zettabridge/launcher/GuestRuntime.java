@@ -96,35 +96,6 @@ final class GuestRuntime {
         return current;
     }
 
-    /** A plugin component by class name, for the IPackageManager method that asks for it. */
-    synchronized android.content.pm.ComponentInfo findComponent(String method, String className) {
-        LoadedPlugin cur = current;
-        if (cur != null) {
-            android.content.pm.ComponentInfo info = componentOf(cur, method, className);
-            if (info != null) return info;
-        }
-        for (LoadedPlugin p : plugins.values()) {
-            android.content.pm.ComponentInfo info = componentOf(p, method, className);
-            if (info != null) return info;
-        }
-        return null;
-    }
-
-    private static android.content.pm.ComponentInfo componentOf(LoadedPlugin p, String method, String className) {
-        switch (method) {
-            case "getServiceInfo":
-                return p.services.get(className);
-            case "getActivityInfo":
-                return p.activities.get(className);
-            case "getReceiverInfo":
-                return p.receivers.get(className);
-            case "getProviderInfo":
-                return p.providerInfos.get(className);
-            default:
-                return null;
-        }
-    }
-
     synchronized boolean isRunning(String packageName) {
         Integer n = liveActivities.get(packageName);
         return n != null && n > 0;
