@@ -25,9 +25,7 @@ These rows are work areas, not a claim that every case is supported today.
 1. Identify the first failing layer: import, Java startup, an Android API, native translation,
    or graphics/input. Keep the affected app version and build ID with the result.
 2. Reproduce the missing behavior in a small test that uses public Android or native
-   interfaces, without loading a proprietary APK in CI. For startup metadata, a useful first
-   fixture is a sample provider querying its own service's manifest metadata before
-   `Application.onCreate`, followed by an activity that checks the same metadata.
+   interfaces, without loading a proprietary APK in CI. The metadata probe below is one example.
 3. Fix the shared behavior. Do not suppress exceptions or branch on an app's package name
    to mark the app as compatible.
 4. Verify the regression, then test on a real ARM64-only phone. Where possible, confirm with
@@ -45,3 +43,16 @@ path and an optional deeper capture for developers.
 
 Features that require system privileges, a separately installed package identity, or bypassing
 app integrity checks are not promised by this rootless design.
+
+## Device probe: startup metadata
+
+Build with `sh tests/launcher/build_metadata_probe.sh` using JDK 17, Android API 35,
+and Android Build Tools 35.0.0. Import `build/metadata-probe/ZettaBridge-Metadata-Probe.apk`
+inside the launcher rather than installing it directly. The screen should say `PASS`:
+the provider's worker was able to read the service metadata before `Application.onCreate`,
+and the activity could still read it after startup. A `FAIL` screen includes the failing check.
+
+For an isolated secondary launcher, assemble a debug APK with
+`./gradlew :app:assembleDebug -PzbSideBySide=true` from `android/launcher` after generating
+the launcher runtime bundle. This installs as `ZettaBridge Test` with independent app data;
+the regular launcher and its app imports are not replaced.
